@@ -4,7 +4,7 @@
   "description": "31-mode visualizer for AI thinking — works with claude, codex, and copilot CLIs",
   "type": "module",
   "bin": {
-    "clinky": "./bin/clinky.js"
+    "clinky": "bin/clinky.js"
   },
   "files": [
     "bin/",
@@ -17,7 +17,15 @@
   "engines": {
     "node": ">=18"
   },
-  "keywords": ["cli", "ai", "claude", "codex", "copilot", "visualization", "thinking"],
+  "keywords": [
+    "cli",
+    "ai",
+    "claude",
+    "codex",
+    "copilot",
+    "visualization",
+    "thinking"
+  ],
   "author": "ichbinsoftware",
   "license": "MIT",
   "homepage": "https://github.com/ichbinsoftware/clinky"
