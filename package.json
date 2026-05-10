@@ -29,5 +29,12 @@
   ],
   "author": "ichbinsoftware",
   "license": "MIT",
-  "homepage": "https://github.com/ichbinsoftware/clinky"
+  "homepage": "https://github.com/ichbinsoftware/clinky",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ichbinsoftware/clinky.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ichbinsoftware/clinky/issues"
+  }
 }
