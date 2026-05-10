@@ -194,7 +194,7 @@ Each topic gets a stable note from a pentatonic scale. The same topic always sou
 | **↺ clear** | reset canvas and state |
 | **read** | open the reading pane (after session completes) |
 
-Pressing think does *not* clear the canvas — new thoughts layer on existing ones. Use clear for a fresh start.
+Pressing think clears the canvas first, then streams the new session. Use clear to wipe back to an empty canvas without starting one.
 
 Hover any element to see the thought behind it. Click to isolate a topic; click again to release. The hub/centre/spine of any radial mode is a reset handle.
 
