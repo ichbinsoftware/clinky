@@ -11,6 +11,7 @@
     "server.js",
     "agents/",
     "public/",
+    "icons/",
     "README.md",
     "LICENSE"
   ],
