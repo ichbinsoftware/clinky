@@ -7,10 +7,8 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@ichbinsoftware/clinky"><img src="https://img.shields.io/npm/v/@ichbinsoftware/clinky.svg?style=flat-square" alt="npm version"></a>
-  <a href="https://www.npmjs.com/package/@ichbinsoftware/clinky"><img src="https://img.shields.io/npm/dm/@ichbinsoftware/clinky.svg?style=flat-square" alt="npm downloads"></a>
   <a href="https://github.com/ichbinsoftware/clinky/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/@ichbinsoftware/clinky.svg?style=flat-square" alt="license"></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/@ichbinsoftware/clinky.svg?style=flat-square" alt="node version"></a>
-  <a href="https://github.com/ichbinsoftware/clinky"><img src="https://img.shields.io/github/stars/ichbinsoftware/clinky?style=flat-square" alt="github stars"></a>
 </p>
 
 A visual and sonic surface for AI thinking. Works with **claude**, **copilot**, and **codex** — the three major "c" CLI agents. The name: *cli + thinking = clinky*.
@@ -177,18 +175,33 @@ At the end of every session the model emits one final `type: "reflection"` node 
 
 ## Sound
 
-Every thought type has a synthesized tone (Web Audio API, no samples):
+A Web Audio synthesis engine — no samples, no files. Each session plays as a piece of music whose structure mirrors the thinking.
 
-| Type | Sound |
-|------|-------|
-| **claim** | topic note, short sine |
-| **branch** | two notes diverging (topic + major third) |
-| **choice** | topic note, held triangle |
-| **dead-end** | descending two-note recoil |
-| **aside** | topic note pitched up a fifth, quiet |
-| **resolution** | three-note chord, held |
+**Aesthetic** (picked per mode): one of `ambient`, `classical`, `jazz`, `industrial`, `techno`, `videogame`. Each carries its own waveforms, envelopes, voicings, FX (reverb / delay / distortion), and key palette. Ambient is wide pads with long reverb; videogame is square-wave chiptune; industrial is sawtooth + crunch; classical is detuned triangle in a hall.
 
-Each topic gets a stable note from a pentatonic scale. The same topic always sounds the same across the session.
+**Session key** is hashed from the prompt — the same prompt always plays in the same key. Each topic gets a stable note within that key, so the same topic always sounds the same across the session.
+
+**Stance** shapes the articulation of every thought:
+
+| Stance | How it plays |
+|---|---|
+| **claiming** | staccato + forte |
+| **exploring** | legato |
+| **questioning** | held fermata |
+| **conceding** | soft decrescendo |
+
+**Rel** between thoughts plays as a two-note interval:
+
+| Rel | Interval |
+|---|---|
+| supports | perfect 5th |
+| contradicts | tritone |
+| synthesizes | major 3rd |
+| refines | minor 2nd |
+| questions | augmented 4th |
+| supersedes | octave |
+
+**Heat** (unexpected / consequential flag) boosts velocity and reverb send. **Because** grounds the thought from below: `internal` lays a pedal tone, `external` plays off-stage with extra reverb and pan, `prior` detunes flat to suggest a memory. Some aesthetics also run a rhythmic bed underneath the harmony.
 
 ## Controls
 
