@@ -5,6 +5,14 @@
   <br/>
 </div>  
 
+<p align="center">
+  <a href="https://www.npmjs.com/package/@ichbinsoftware/clinky"><img src="https://img.shields.io/npm/v/@ichbinsoftware/clinky.svg?style=flat-square" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/@ichbinsoftware/clinky"><img src="https://img.shields.io/npm/dm/@ichbinsoftware/clinky.svg?style=flat-square" alt="npm downloads"></a>
+  <a href="https://github.com/ichbinsoftware/clinky/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/@ichbinsoftware/clinky.svg?style=flat-square" alt="license"></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/@ichbinsoftware/clinky.svg?style=flat-square" alt="node version"></a>
+  <a href="https://github.com/ichbinsoftware/clinky"><img src="https://img.shields.io/github/stars/ichbinsoftware/clinky?style=flat-square" alt="github stars"></a>
+</p>
+
 A visual and sonic surface for AI thinking. Works with **claude**, **copilot**, and **codex** — the three major "c" CLI agents. The name: *cli + thinking = clinky*.
 
 Not a chat interface. Not a document. A living map of how a thought unfolds — branches, choices, narrowings, dead ends, resolutions — rendered as something you'd want to look at and listen to.
