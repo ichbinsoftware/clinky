@@ -1,6 +1,6 @@
 {
   "name": "@ichbinsoftware/clinky",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "31-mode visualizer for AI thinking — works with claude, codex, and copilot CLIs",
   "type": "module",
   "bin": {
