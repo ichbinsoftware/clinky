@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>clinky — inspect</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --paper: #f5f1e8; --ink: #0a0a0a; --red: #e63946; --yellow: #ffd60a;
+    --mono: 'JetBrains Mono', monospace; --sans: 'Space Grotesk', sans-serif;
+    --supports: #2a9d8f; --contradicts: #e63946; --synthesizes: #f4a261;
+    --refines: #8ecae6; --supersedes: #6c757d; --questions: #9656a2;
+  }
+  body { background: var(--paper); color: var(--ink); font-family: var(--sans); padding: 2vh 3vw; max-width: 1400px; margin: 0 auto; }
+
+  h1 { font-size: 2.2rem; font-weight: 700; letter-spacing: -0.02em; text-transform: lowercase; }
+  .sub { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.15em; color: var(--red); margin-bottom: 1.5rem; }
+
+  .prompt-bar { display: flex; gap: 0.5rem; background: #fff; border: 1.5px solid var(--ink); padding: 0.5rem; margin-bottom: 1rem; align-items: center; }
+  .prompt-bar input { flex: 1; border: none; outline: none; font-family: var(--sans); font-size: 0.95rem; padding: 0.5rem 0.8rem; }
+  .prompt-bar button { background: var(--ink); color: var(--paper); border: none; font-family: var(--sans); font-size: 0.85rem; padding: 0.5rem 1rem; cursor: pointer; text-transform: lowercase; }
+  .prompt-bar button:hover { background: var(--red); }
+  .prompt-bar button.stop { background: var(--red); }
+
+  .layout { display: grid; grid-template-columns: 1fr 260px; gap: 1.5rem; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+  .stream { display: flex; flex-direction: column; gap: 0.5rem; }
+  .node { background: #fff; border: 1px solid #ccc; padding: 0.7rem 0.9rem; scroll-margin-top: 80px; transition: background 0.3s; }
+  .node.flash { background: var(--yellow); }
+  .node-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; font-family: var(--mono); font-size: 0.7rem; }
+  .node-head .id { background: var(--ink); color: var(--paper); padding: 1px 5px; font-weight: 700; }
+  .node-head .time { color: #888; }
+  .node-head .topic { display: inline-flex; align-items: center; gap: 0.3rem; padding: 1px 6px; background: #eee; border-radius: 2px; text-transform: lowercase; letter-spacing: 0.03em; }
+  .node-head .topic-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .node-head .type { color: #555; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.62rem; padding: 1px 5px; background: #f0ece0; }
+  .node-head .type.resolution { background: #d4f0ea; color: #1b7f72; font-weight: 700; }
+  .node-head .type.dead-end { text-decoration: line-through; color: #888; }
+  .node-head .type.aside { font-style: italic; color: #999; }
+  .node-head .type.reflection { background: #9656a2; color: #fff; font-weight: 700; }
+  .node.node-reflection { border-left: 3px solid #9656a2; background: #faf5ff; }
+  .node.node-reflection .node-text { font-style: italic; color: #4a2858; }
+  .node-head .stance { color: #555; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em; padding: 1px 5px; border: 1px dashed #bbb; }
+  .node-head .conf-bar { display: inline-block; width: 40px; height: 5px; background: #eee; position: relative; }
+  .node-head .conf-bar::after { content: ''; position: absolute; top: 0; left: 0; height: 100%; background: var(--ink); width: var(--conf); }
+  .node-head .heat { font-size: 0.62rem; color: #b85420; font-weight: 700; letter-spacing: 0.04em; }
+  .node-head .batch { font-family: var(--mono); font-size: 0.58rem; color: #888; background: #f0ece0; padding: 1px 5px; border-radius: 2px; }
+  .node-head .incoming { font-family: var(--mono); font-size: 0.58rem; color: #2a7f6e; background: #dff2ed; padding: 1px 5px; border-radius: 2px; font-weight: 700; }
+  .gap-marker { font-family: var(--mono); font-size: 0.55rem; color: #aaa; text-align: center; padding: 0.2rem 0; letter-spacing: 0.08em; }
+  .gap-marker.long { color: #b85420; font-weight: 700; }
+
+  .batch-header { background: #1a1a2a; color: #f5f1e8; border: 1px solid #333; padding: 0.5rem 0.9rem; margin: 0.4rem 0 0.2rem; font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.04em; }
+  .batch-header .bh-title { font-weight: 700; color: var(--yellow); margin-right: 0.6rem; }
+  .batch-header .bh-dwell { color: #b8b4a8; margin-right: 0.6rem; }
+  .batch-header .bh-narr-count { color: #c9a676; margin-right: 0.6rem; }
+  .batch-header .bh-toggle { cursor: pointer; color: #888; font-size: 0.55rem; letter-spacing: 0.04em; text-transform: uppercase; }
+  .batch-header .bh-toggle:hover { color: var(--yellow); }
+  .batch-header .bh-narration { display: none; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed #444; font-family: var(--sans); font-size: 0.78rem; line-height: 1.55; color: #d5d0c0; font-style: italic; }
+  .batch-header.show-narr .bh-narration { display: block; }
+
+  .narrate-toggle { display: inline-flex; align-items: center; gap: 0.3rem; font-family: var(--mono); font-size: 0.68rem; color: #666; cursor: pointer; user-select: none; padding-left: 0.5rem; }
+  .narrate-toggle input { cursor: pointer; }
+  .narrate-toggle:hover { color: var(--ink); }
+
+  .session-opts { display: inline-flex; align-items: center; gap: 0.4rem; padding-left: 0.5rem; }
+  .session-opts select { font-family: var(--mono); font-size: 0.68rem; background: #fff; border: 1px solid var(--ink); padding: 0.25rem 0.4rem; cursor: pointer; color: var(--ink); }
+  .session-opts label { font-family: var(--mono); font-size: 0.6rem; color: #888; text-transform: uppercase; letter-spacing: 0.06em; }
+
+  .node-text { font-size: 0.9rem; line-height: 1.45; margin-bottom: 0.4rem; }
+
+  .node-meta { display: flex; flex-wrap: wrap; gap: 0.35rem 0.8rem; font-family: var(--mono); font-size: 0.65rem; color: #666; align-items: center; }
+  .node-meta .label { color: #999; letter-spacing: 0.04em; text-transform: uppercase; font-size: 0.58rem; }
+  .ref-chip { display: inline-flex; align-items: center; gap: 0.25rem; padding: 1px 6px; cursor: pointer; background: #f0ece0; border: 1px solid #ddd; font-weight: 700; text-decoration: none; color: var(--ink); }
+  .ref-chip:hover { background: var(--yellow); }
+  .ref-chip.because { background: #e8f0e0; border-color: #b4c9a3; }
+  .ref-chip.because.tag { font-weight: 500; font-style: italic; cursor: default; color: #4a7040; }
+
+  .rel-tag { padding: 1px 5px; border-radius: 2px; font-weight: 700; font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.05em; color: #fff; }
+  .rel-tag.supports { background: var(--supports); }
+  .rel-tag.contradicts { background: var(--contradicts); }
+  .rel-tag.synthesizes { background: var(--synthesizes); color: #3a2a10; }
+  .rel-tag.refines { background: var(--refines); color: #1a3545; }
+  .rel-tag.supersedes { background: var(--supersedes); }
+  .rel-tag.questions { background: var(--questions); }
+
+  .raw-toggle { cursor: pointer; user-select: none; color: #888; font-size: 0.55rem; letter-spacing: 0.04em; text-transform: uppercase; margin-top: 0.3rem; display: inline-block; }
+  .raw-toggle:hover { color: var(--red); }
+  .raw-json { display: none; font-family: var(--mono); font-size: 0.62rem; background: #f7f4ea; padding: 0.5rem; margin-top: 0.3rem; white-space: pre-wrap; border-left: 2px solid var(--ink); line-height: 1.5; }
+  .node.show-raw .raw-json { display: block; }
+
+  /* coverage panel */
+  .stats { background: #fff; border: 1px solid var(--ink); padding: 0.8rem 0.9rem; font-family: var(--mono); font-size: 0.7rem; line-height: 1.55; position: sticky; top: 1rem; }
+  .stats h3 { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--red); margin-bottom: 0.5rem; }
+  .stats .row { display: flex; justify-content: space-between; align-items: center; padding: 0.15rem 0; }
+  .stats .row .v { font-weight: 700; }
+  .stats .bar { height: 4px; background: #eee; margin-top: 2px; }
+  .stats .bar > div { height: 100%; background: var(--ink); }
+  .stats .hr { border-top: 1px solid #eee; margin: 0.4rem 0; }
+  .stats .muted { color: #999; }
+  .stats .split { display: flex; height: 4px; background: #eee; margin-top: 2px; overflow: hidden; }
+  .stats .split > div { height: 100%; }
+  .stats .split .b-int    { background: var(--supports); }
+  .stats .split .b-ext    { background: var(--ink); }
+  .stats .split .b-pri    { background: #c8c8c8; }
+  .stats .split .r-cross  { background: var(--supports); }
+  .stats .split .r-within { background: var(--refines); }
+  .stats .legend { font-family: var(--mono); font-size: 0.55rem; color: #999; padding-top: 1px; letter-spacing: 0.04em; display: flex; gap: 0.6rem; }
+  .stats .legend .swatch { display: inline-block; width: 6px; height: 6px; margin-right: 3px; vertical-align: middle; }
+
+  .status { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: #888; margin-bottom: 0.6rem; }
+  .status.streaming { color: var(--red); }
+  .status.done { color: var(--supports); }
+
+  .empty { font-family: var(--mono); font-size: 0.8rem; color: #999; text-align: center; padding: 3rem 0; }
+  ::selection { background: var(--yellow); }
+
+  /* raw-JSON panel at the bottom of the page */
+  .raw-panel { margin-top: 2rem; background: #1a1a2a; color: #f5f1e8; border: 1px solid var(--ink); }
+  .raw-panel-head { display: flex; align-items: center; justify-content: space-between; padding: 0.55rem 0.9rem; border-bottom: 1px solid #333; font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.06em; }
+  .raw-panel-head .rp-title { color: var(--yellow); font-weight: 700; text-transform: uppercase; }
+  .raw-panel-head .rp-meta  { color: #b8b4a8; }
+  .raw-panel-head button    { background: transparent; color: #d5d0c0; border: 1px solid #444; font-family: var(--mono); font-size: 0.62rem; padding: 0.25rem 0.55rem; cursor: pointer; text-transform: lowercase; letter-spacing: 0.04em; }
+  .raw-panel-head button:hover { background: #333; color: var(--yellow); }
+  .raw-panel-head button.copied { background: var(--supports); color: #fff; border-color: var(--supports); }
+  .raw-panel-body { max-height: 60vh; overflow: auto; font-family: var(--mono); font-size: 0.62rem; line-height: 1.55; padding: 0.9rem; white-space: pre; color: #e8e4d5; }
+  .raw-panel.collapsed .raw-panel-body { display: none; }
+  .raw-panel.collapsed .raw-panel-head { border-bottom: none; }
+</style>
+</head>
+<body>
+
+<h1>inspect</h1>
+<p class="sub">live stream — enriched thought schema</p>
+
+<div class="prompt-bar">
+  <input id="prompt" type="text" placeholder="ask anything…" />
+  <button id="go">think ▶</button>
+  <button id="stop" class="stop" style="display:none">stop ■</button>
+  <button id="clear">clear ↺</button>
+  <span class="session-opts">
+    <label>agent</label>
+    <select id="agent" title="Backend agent. claude = default; copilot = GitHub Copilot CLI (must be installed); codex = OpenAI Codex CLI (must be installed).">
+      <option value="claude" selected>claude</option>
+      <option value="copilot">copilot</option>
+      <option value="codex">codex</option>
+    </select>
+    <label>model</label>
+    <select id="model" title="Pinned model version. Aliases like 'sonnet' would auto-resolve to latest, which breaks benchmark reproducibility.">
+      <option value="claude-sonnet-4-6" selected>sonnet 4.6</option>
+      <option value="claude-opus-4-7">opus 4.7</option>
+      <option value="claude-opus-4-6">opus 4.6 (fast)</option>
+      <option value="claude-haiku-4-5-20251001">haiku 4.5</option>
+    </select>
+    <style>
+      #model:disabled { opacity: 0.45; cursor: default; }
+    </style>
+    <label>effort</label>
+    <select id="effort" title="Reasoning effort level. Higher = more deliberation. Default high — medium stutters on procedural prompts. Copilot only supports low/medium/high; xhigh and max clamp to high.">
+      <option value="low">low</option>
+      <option value="medium">medium</option>
+      <option value="high" selected>high</option>
+      <option value="xhigh">xhigh</option>
+      <option value="max">max</option>
+    </select>
+  </span>
+  <label class="narrate-toggle" title="Save this session to disk under clinky/sessions/ so it can be browsed at /sessions.html and replayed into any mode. Default off — opt in here.">
+    <input type="checkbox" id="record" />
+    <span>record</span>
+  </label>
+</div>
+
+<div class="status" id="status">idle</div>
+
+<div class="layout">
+  <div class="stream" id="stream">
+    <div class="empty">no nodes yet — press think</div>
+  </div>
+
+  <div class="stats" id="stats">
+    <h3>coverage</h3>
+    <div class="row"><span>total</span><span class="v" id="s-total">0</span></div>
+    <div class="hr"></div>
+    <div class="row"><span>has refs</span><span class="v" id="s-refs">0 / 0</span></div>
+    <div class="bar"><div id="b-refs" style="width:0%"></div></div>
+    <div class="row"><span>has rel</span><span class="v" id="s-rel">0 / 0</span></div>
+    <div class="bar"><div id="b-rel" style="width:0%"></div></div>
+    <div class="row"><span>has because</span><span class="v" id="s-because">0 / 0</span></div>
+    <div class="bar"><div id="b-because" style="width:0%"></div></div>
+    <div class="row"><span>has stance</span><span class="v" id="s-stance">0 / 0</span></div>
+    <div class="bar"><div id="b-stance" style="width:0%"></div></div>
+    <div class="row"><span>has heat</span><span class="v" id="s-heat">0 / 0</span></div>
+    <div class="bar"><div id="b-heat" style="width:0%"></div></div>
+    <div class="hr"></div>
+    <h3 style="margin-top:0">informativeness</h3>
+    <div class="row" title="Of all because entries, what fraction point at internal ids vs the 'external' / 'prior' fallbacks. Higher internal = grounded in the trace itself.">
+      <span>because</span><span class="v" id="s-bshape">—</span>
+    </div>
+    <div class="split">
+      <div class="b-int"  id="b-bint"  style="width:0%"></div>
+      <div class="b-ext"  id="b-bext"  style="width:0%"></div>
+      <div class="b-pri"  id="b-bpri"  style="width:0%"></div>
+    </div>
+    <div class="legend"><span><span class="swatch" style="background:var(--supports)"></span>internal</span><span><span class="swatch" style="background:var(--ink)"></span>external</span><span><span class="swatch" style="background:#c8c8c8"></span>prior</span></div>
+
+    <div class="row" title="Of all refs entries, what fraction cross a batch boundary. Cross-batch refs are connectivity; within-batch refs are local moves.">
+      <span>refs</span><span class="v" id="s-rshape">—</span>
+    </div>
+    <div class="split">
+      <div class="r-cross"  id="b-rcross"  style="width:0%"></div>
+      <div class="r-within" id="b-rwithin" style="width:0%"></div>
+    </div>
+    <div class="legend"><span><span class="swatch" style="background:var(--supports)"></span>cross-batch</span><span><span class="swatch" style="background:var(--refines)"></span>within-batch</span></div>
+
+    <div class="row" title="Mean heat across populated nodes. Higher = the model flagged more moments as consequential.">
+      <span>heat mean</span><span class="v" id="s-hmean">—</span>
+    </div>
+    <div class="row muted" title="Which thought types received heat. If only one type carries it, the signal is type-locked.">
+      <span>heat on</span><span class="v" id="s-hon">—</span>
+    </div>
+
+    <div class="hr"></div>
+    <div class="row muted"><span>topics</span><span class="v" id="s-topics">0</span></div>
+    <div class="row muted"><span>batches</span><span class="v" id="s-batches">0</span></div>
+    <div class="row muted"><span>avg gap</span><span class="v" id="s-avggap">—</span></div>
+    <div class="row muted"><span>elapsed</span><span class="v" id="s-elapsed">0s</span></div>
+
+    <div id="session-block" style="display:none">
+      <div class="hr"></div>
+      <h3 style="margin-top:0">session</h3>
+      <div class="row"><span>model</span><span class="v" id="u-model">—</span></div>
+      <div class="row"><span>effort</span><span class="v" id="u-effort">—</span></div>
+      <div class="row"><span>narrate</span><span class="v" id="u-narrate">—</span></div>
+      <div class="hr"></div>
+      <div class="row"><span>tokens in</span><span class="v" id="u-in">—</span></div>
+      <div class="row"><span>tokens out</span><span class="v" id="u-out">—</span></div>
+      <div class="row"><span>thinking toks</span><span class="v" id="u-think">—</span></div>
+      <div class="row"><span>cache read</span><span class="v" id="u-cacheR">—</span></div>
+      <div class="row"><span>cache new</span><span class="v" id="u-cacheC">—</span></div>
+      <div class="row"><span>cost</span><span class="v" id="u-cost">—</span></div>
+      <div class="row"><span>api duration</span><span class="v" id="u-apidur">—</span></div>
+      <div class="row"><span>stop reason</span><span class="v" id="u-stop">—</span></div>
+      <div class="row"><span>turns</span><span class="v" id="u-turns">—</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="raw-panel" id="raw-panel">
+  <div class="raw-panel-head">
+    <span>
+      <span class="rp-title">raw stream</span>
+      <span class="rp-meta" id="rp-meta">empty</span>
+    </span>
+    <span>
+      <button id="rp-copy" title="copy JSON to clipboard">copy</button>
+      <button id="rp-toggle" title="show / hide">hide</button>
+    </span>
+  </div>
+  <pre class="raw-panel-body" id="rp-body">{}</pre>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const streamEl = $('stream');
+const statusEl = $('status');
+
+const state = { nodes: [], topics: [], es: null, startMs: 0, elapsedTimer: null, lastBatchId: 0 };
+
+// Raw-stream collector — accumulates every event verbatim + a convenience
+// narration array. Rendered as pretty-printed JSON in the panel at the bottom.
+const rawStream = {
+  prompt: '',
+  session: null,   // { model, effort, narrate }
+  topics: [],
+  nodes: [],
+  batches: [],     // full batch events (batch_id, thinking/text chars + excerpts)
+  narration: [],   // flat [{batch_id, text}] — voice track alone, easy to concat
+  graph: null,     // { incoming_refs, batches }
+  usage: null,     // session telemetry
+  status: 'idle',  // idle | thinking | streaming | done | error | stopped
+};
+
+function renderRaw() {
+  const body = document.getElementById('rp-body');
+  const meta = document.getElementById('rp-meta');
+  if (!body || !meta) return;
+  body.textContent = JSON.stringify(rawStream, null, 2);
+  const parts = [];
+  if (rawStream.nodes.length)     parts.push(`${rawStream.nodes.length} nodes`);
+  if (rawStream.batches.length)   parts.push(`${rawStream.batches.length} batches`);
+  if (rawStream.narration.length) parts.push(`${rawStream.narration.length} narration`);
+  if (rawStream.usage)            parts.push('usage');
+  if (rawStream.graph)            parts.push('graph');
+  meta.textContent = parts.length ? parts.join(' · ') : 'empty';
+}
+
+function resetRaw() {
+  rawStream.prompt = '';
+  rawStream.session = null;
+  rawStream.topics = [];
+  rawStream.nodes = [];
+  rawStream.batches = [];
+  rawStream.narration = [];
+  rawStream.graph = null;
+  rawStream.usage = null;
+  rawStream.status = 'idle';
+  delete rawStream.error;
+  renderRaw();
+}
+
+function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function topicColor(id) { const t = state.topics.find(t => t.id === id); return t ? t.color : '#888'; }
+
+function renderNode(n) {
+  const hasRefs = n.refs && n.refs.length > 0;
+  const hasBecause = n.because && n.because.length > 0;
+  const hasRel = !!n.rel;
+  const hasStance = !!n.stance;
+  const hasHeat = n.heat != null;
+  const hasBatch = n.batch_id != null;
+
+  // Gap marker for within-batch pauses only. Cross-batch dwell is already shown
+  // in the batch header (`⏸ Xs deliberation before this batch`).
+  const isBatchFirst = n.batch_position === 0;
+  if (!isBatchFirst && n.elapsed_ms != null && n.elapsed_ms > 800 && state.nodes.length > 0) {
+    const gap = document.createElement('div');
+    gap.className = 'gap-marker' + (n.elapsed_ms > 4000 ? ' long' : '');
+    gap.textContent = `⏸ ${(n.elapsed_ms / 1000).toFixed(1)}s mid-batch pause`;
+    streamEl.appendChild(gap);
+  }
+
+  const el = document.createElement('div');
+  el.className = 'node node-' + n.type;
+  el.id = 'n-' + n.id;
+  el.innerHTML = `
+    <div class="node-head">
+      <span class="id">#${n.id}</span>
+      <span class="time">t+${n.t}</span>
+      ${hasBatch ? `<span class="batch" title="batch ${n.batch_id}, position ${n.batch_position}, elapsed ${n.elapsed_ms}ms">b${n.batch_id}.${n.batch_position}</span>` : ''}
+      <span class="topic"><span class="topic-dot" style="background:${topicColor(n.topic)}"></span>${escapeHtml(n.topic)}</span>
+      <span class="type ${n.type}">${n.type}</span>
+      ${hasStance ? `<span class="stance">${n.stance}</span>` : ''}
+      <span class="conf-bar" style="--conf:${Math.round((n.confidence||0)*100)}%" title="confidence ${Math.round((n.confidence||0)*100)}%"></span>
+      ${hasHeat ? `<span class="heat" title="heat ${n.heat}">♨ ${n.heat.toFixed(2)}</span>` : ''}
+      <span class="incoming" data-incoming style="display:none" title="how many later thoughts reference this one"></span>
+    </div>
+    <div class="node-text">${escapeHtml(n.text)}</div>
+    <div class="node-meta">
+      ${hasRefs ? `<span class="label">refs</span>${n.refs.map(r => `<a class="ref-chip" href="#n-${r}" data-ref="${r}">#${r}</a>`).join('')}` : ''}
+      ${hasRel ? `<span class="rel-tag ${n.rel}">${n.rel}</span>` : ''}
+      ${hasBecause ? `<span class="label">because</span>${n.because.map(r => typeof r === 'string' ? `<span class="ref-chip because tag">${escapeHtml(r)}</span>` : `<a class="ref-chip because" href="#n-${r}" data-ref="${r}">#${r}</a>`).join('')}` : ''}
+    </div>
+    <span class="raw-toggle">show raw json</span>
+    <pre class="raw-json">${escapeHtml(JSON.stringify(n, null, 2))}</pre>
+  `;
+  el.querySelector('.raw-toggle').addEventListener('click', () => {
+    const open = el.classList.toggle('show-raw');
+    el.querySelector('.raw-toggle').textContent = open ? 'hide raw json' : 'show raw json';
+  });
+  el.querySelectorAll('.ref-chip').forEach(chip => {
+    chip.addEventListener('click', e => {
+      e.preventDefault();
+      const tid = chip.dataset.ref;
+      const target = document.getElementById('n-' + tid);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.classList.add('flash');
+        setTimeout(() => target.classList.remove('flash'), 900);
+      }
+    });
+  });
+  return el;
+}
+
+function updateStats() {
+  const n = state.nodes.length;
+  const c = (fn) => state.nodes.filter(fn).length;
+  const setRow = (idBase, count) => {
+    const pct = n > 0 ? Math.round((count / n) * 100) : 0;
+    $('s-' + idBase).textContent = `${count} / ${n} · ${pct}%`;
+    $('b-' + idBase).style.width = pct + '%';
+  };
+  $('s-total').textContent = n;
+  setRow('refs',    c(x => x.refs && x.refs.length));
+  setRow('rel',     c(x => x.rel));
+  setRow('because', c(x => x.because && x.because.length));
+  setRow('stance',  c(x => x.stance));
+  setRow('heat',    c(x => x.heat != null));
+  $('s-topics').textContent = state.topics.length;
+  // Batch / gap stats
+  const batchIds = new Set(state.nodes.map(x => x.batch_id).filter(x => x != null));
+  $('s-batches').textContent = batchIds.size || '—';
+  const gaps = state.nodes.map(x => x.elapsed_ms).filter(x => x != null && x > 0);
+  $('s-avggap').textContent = gaps.length ? (gaps.reduce((a,b) => a+b, 0) / gaps.length / 1000).toFixed(1) + 's' : '—';
+
+  // --- informativeness ---
+  // because: classify each entry as internal id / "external" / "prior".
+  // Coverage tells you the field is present; this tells you whether the model
+  // actually grounded the claim in the trace, or fell through to the fallback.
+  let bInt = 0, bExt = 0, bPri = 0;
+  for (const node of state.nodes) {
+    if (!node.because) continue;
+    for (const entry of node.because) {
+      if (typeof entry === 'string') {
+        if (entry === 'external') bExt++;
+        else if (entry === 'prior') bPri++;
+      } else {
+        bInt++;
+      }
+    }
+  }
+  const bTot = bInt + bExt + bPri;
+  const bIntPct = bTot ? Math.round(bInt / bTot * 100) : 0;
+  const bExtPct = bTot ? Math.round(bExt / bTot * 100) : 0;
+  const bPriPct = bTot ? Math.round(bPri / bTot * 100) : 0;
+  $('s-bshape').textContent = bTot ? `${bIntPct} / ${bExtPct} / ${bPriPct}` : '—';
+  $('b-bint').style.width = bIntPct + '%';
+  $('b-bext').style.width = bExtPct + '%';
+  $('b-bpri').style.width = bPriPct + '%';
+
+  // refs: cross-batch vs within-batch. Cross-batch refs are the connectivity
+  // signal — they're what makes the trace not just a stack of bullet lists.
+  const nodeById = {};
+  for (const x of state.nodes) nodeById[x.id] = x;
+  let rCross = 0, rWithin = 0;
+  for (const node of state.nodes) {
+    if (!node.refs) continue;
+    for (const refId of node.refs) {
+      const target = nodeById[refId];
+      if (!target) continue;
+      if (target.batch_id !== node.batch_id) rCross++;
+      else rWithin++;
+    }
+  }
+  const rTot = rCross + rWithin;
+  const rCrossPct  = rTot ? Math.round(rCross  / rTot * 100) : 0;
+  const rWithinPct = rTot ? Math.round(rWithin / rTot * 100) : 0;
+  $('s-rshape').textContent = rTot ? `${rCrossPct} / ${rWithinPct}` : '—';
+  $('b-rcross').style.width  = rCrossPct  + '%';
+  $('b-rwithin').style.width = rWithinPct + '%';
+
+  // heat: mean + which types carry it. If only `claim` ever has heat, the
+  // model is using heat as a confidence proxy, not as a surprise signal.
+  const heated = state.nodes.filter(x => x.heat != null);
+  $('s-hmean').textContent = heated.length
+    ? (heated.reduce((a, b) => a + b.heat, 0) / heated.length).toFixed(2)
+    : '—';
+  const heatTypes = [...new Set(heated.map(x => x.type))];
+  $('s-hon').textContent = heatTypes.length ? heatTypes.join(', ') : '—';
+}
+
+function setStatus(s, cls) {
+  statusEl.textContent = s;
+  statusEl.className = 'status ' + (cls || '');
+}
+
+function startElapsed() {
+  state.startMs = performance.now();
+  clearInterval(state.elapsedTimer);
+  state.elapsedTimer = setInterval(() => {
+    $('s-elapsed').textContent = ((performance.now() - state.startMs) / 1000).toFixed(1) + 's';
+  }, 100);
+}
+function stopElapsed() { clearInterval(state.elapsedTimer); }
+
+function clearStream() {
+  state.nodes = [];
+  state.topics = [];
+  state.lastBatchId = 0;
+  streamEl.innerHTML = '<div class="empty">no nodes yet — press think</div>';
+  updateStats();
+  $('s-elapsed').textContent = '0s';
+  $('s-batches').textContent = '0';
+  $('s-avggap').textContent = '—';
+  $('session-block').style.display = 'none';
+  setStatus('idle');
+  resetRaw();
+}
+
+function startThink() {
+  clearStream();
+  if (state.es) state.es.close();
+  const prompt = $('prompt').value.trim();
+  if (!prompt) return;
+
+  $('go').style.display = 'none';
+  $('stop').style.display = '';
+  setStatus('thinking…', 'streaming');
+  startElapsed();
+
+  // use mode=inspect so server assigns a palette (falls back to default if unknown)
+  const record  = $('record').checked  ? '1' : '0';
+  const model = $('model').value;
+  const effort = $('effort').value;
+  const agent = $('agent').value;
+  state.sessionConfig = { agent, model, effort, narrate: true, record: record === '1' };
+  rawStream.prompt = prompt;
+  rawStream.session = { agent, model, effort, narrate: true };
+  rawStream.status = 'thinking';
+  renderRaw();
+  // Replay mode: ?session=<id> on the page URL routes the EventSource to the
+  // saved JSONL instead of spawning a fresh agent run.
+  const pageParams = new URLSearchParams(window.location.search);
+  const sid = pageParams.get('session');
+  let esUrl;
+  if (sid) {
+    const speed = pageParams.get('speed');
+    esUrl = `/api/replay/${encodeURIComponent(sid)}${speed != null ? `?speed=${encodeURIComponent(speed)}` : ''}`;
+    rawStream.session = { ...(rawStream.session || {}), replay: sid };
+  } else {
+    esUrl = `/api/think?prompt=${encodeURIComponent(prompt)}&mode=inspect&narrate=1&record=${record}&model=${encodeURIComponent(model)}&effort=${encodeURIComponent(effort)}&agent=${encodeURIComponent(agent)}`;
+  }
+  state.es = new EventSource(esUrl);
+
+  state.es.addEventListener('topics', e => {
+    state.topics = JSON.parse(e.data);
+    rawStream.topics = state.topics;
+    updateStats();
+    renderRaw();
+  });
+  state.es.addEventListener('node', e => {
+    const n = JSON.parse(e.data);
+    state.nodes.push(n);
+    rawStream.nodes.push(n);
+    rawStream.status = 'streaming';
+    if (streamEl.querySelector('.empty')) streamEl.innerHTML = '';
+    streamEl.appendChild(renderNode(n));
+    // Backfill the preceding batch header's dwell — the first node of each batch
+    // carries the wall-clock gap since the previous batch's last node.
+    if (n.batch_position === 0 && n.batch_id != null && n.batch_id > 1 && n.elapsed_ms > 0) {
+      const header = streamEl.querySelector(`.batch-header[data-batch-id="${n.batch_id}"] .bh-dwell`);
+      if (header) {
+        const secs = (n.elapsed_ms / 1000).toFixed(1);
+        header.textContent = `⏸ ${secs}s deliberation before this batch`;
+      }
+    }
+    setStatus(`streaming · ${state.nodes.length} nodes`, 'streaming');
+    updateStats();
+    renderRaw();
+  });
+  state.es.addEventListener('status', () => setStatus('thinking…', 'streaming'));
+  state.es.addEventListener('batch', e => {
+    const b = JSON.parse(e.data);
+    rawStream.batches.push(b);
+    if (b.text_chars > 0 && b.text_excerpt) {
+      rawStream.narration.push({ batch_id: b.batch_id, text: b.text_excerpt });
+    }
+    if (streamEl.querySelector('.empty')) streamEl.innerHTML = '';
+    const div = document.createElement('div');
+    div.className = 'batch-header';
+    div.dataset.batchId = b.batch_id;
+    const hasNarr = b.text_chars > 0;
+    // Structural header; dwell filled in when the batch's first node arrives.
+    // Narration fields populate only when the session ran with ?narrate=1.
+    div.innerHTML = `
+      <span class="bh-title">▣ batch ${b.batch_id}</span>
+      <span class="bh-meta bh-dwell"></span>
+      ${hasNarr ? `<span class="bh-narr-count">✎ ${b.text_chars} chars narrated</span><span class="bh-toggle">show narration</span><div class="bh-narration">${escapeHtml(b.text_excerpt)}${b.text_chars > 200 ? '…' : ''}</div>` : ''}
+    `;
+    const toggle = div.querySelector('.bh-toggle');
+    if (toggle) {
+      toggle.addEventListener('click', () => {
+        const open = div.classList.toggle('show-narr');
+        toggle.textContent = open ? 'hide narration' : 'show narration';
+      });
+    }
+    streamEl.appendChild(div);
+    renderRaw();
+  });
+  state.es.addEventListener('usage', e => {
+    const u = JSON.parse(e.data);
+    rawStream.usage = u;
+    renderRaw();
+    const fmt = (n) => n == null ? '—' : n.toLocaleString();
+    const fmtPct = (r, c) => (r == null || c == null || (r + c) === 0) ? '—' : `${fmt(r)} (${Math.round(r / (r + c) * 100)}%)`;
+    const cfg = state.sessionConfig || {};
+    $('u-model').textContent = cfg.model || '—';
+    $('u-effort').textContent = cfg.effort || '—';
+    $('u-narrate').textContent = cfg.narrate ? 'on' : 'off';
+    $('u-in').textContent = fmt(u.input_tokens);
+    $('u-out').textContent = fmt(u.output_tokens);
+    $('u-think').textContent = fmt(u.thinking_tokens);
+    $('u-cacheR').textContent = fmtPct(u.cache_read_tokens, u.cache_creation_tokens);
+    $('u-cacheC').textContent = fmt(u.cache_creation_tokens);
+    $('u-cost').textContent = u.total_cost_usd == null ? '—' : `$${u.total_cost_usd.toFixed(4)}`;
+    $('u-apidur').textContent = u.duration_api_ms == null ? '—' : `${(u.duration_api_ms / 1000).toFixed(1)}s`;
+    $('u-stop').textContent = u.stop_reason || '—';
+    $('u-turns').textContent = u.num_turns ?? '—';
+    $('session-block').style.display = '';
+  });
+  state.es.addEventListener('graph', e => {
+    // Backfill incoming_refs_count chips once the full graph is known
+    const g = JSON.parse(e.data);
+    rawStream.graph = g;
+    const incoming = g.incoming_refs || {};
+    for (const [id, count] of Object.entries(incoming)) {
+      const chip = document.querySelector(`#n-${id} [data-incoming]`);
+      if (chip) {
+        chip.textContent = `← ${count}`;
+        chip.style.display = '';
+        chip.title = `referenced by ${count} later thought${count === 1 ? '' : 's'}`;
+      }
+    }
+    renderRaw();
+  });
+  state.es.addEventListener('done', () => {
+    setStatus(`done · ${state.nodes.length} nodes · ${((performance.now() - state.startMs)/1000).toFixed(1)}s`, 'done');
+    rawStream.status = 'done';
+    $('go').style.display = '';
+    $('stop').style.display = 'none';
+    stopElapsed();
+    state.es.close();
+    renderRaw();
+  });
+  state.es.addEventListener('error', e => {
+    if (e.data) {
+      try {
+        const err = JSON.parse(e.data);
+        setStatus('error: ' + (err.error || 'unknown'));
+        rawStream.status = 'error';
+        rawStream.error = err;
+      } catch {
+        setStatus('error');
+        rawStream.status = 'error';
+      }
+    }
+    $('go').style.display = '';
+    $('stop').style.display = 'none';
+    stopElapsed();
+    renderRaw();
+  });
+}
+
+$('go').addEventListener('click', startThink);
+$('prompt').addEventListener('keydown', e => { if (e.key === 'Enter') startThink(); });
+$('stop').addEventListener('click', () => {
+  if (state.es) state.es.close();
+  setStatus(`stopped · ${state.nodes.length} nodes`);
+  $('go').style.display = '';
+  $('stop').style.display = 'none';
+  stopElapsed();
+});
+$('clear').addEventListener('click', clearStream);
+
+// Raw-panel copy + show/hide wiring
+$('rp-copy').addEventListener('click', async () => {
+  const btn = $('rp-copy');
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(rawStream, null, 2));
+    btn.textContent = 'copied';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1200);
+  } catch {
+    btn.textContent = 'failed';
+    setTimeout(() => { btn.textContent = 'copy'; }, 1200);
+  }
+});
+$('rp-toggle').addEventListener('click', () => {
+  const panel = $('raw-panel');
+  const btn = $('rp-toggle');
+  const hidden = panel.classList.toggle('collapsed');
+  btn.textContent = hidden ? 'show' : 'hide';
+});
+
+renderRaw();
+
+// Sync model dropdown to selected agent
+const MODEL_OPTIONS = {
+  claude: [
+    { value: 'claude-sonnet-4-6',         label: 'sonnet 4.6' },
+    { value: 'claude-opus-4-7',           label: 'opus 4.7' },
+    { value: 'claude-opus-4-6',           label: 'opus 4.6' },
+    { value: 'claude-haiku-4-5-20251001', label: 'haiku 4.5' },
+  ],
+  codex: [
+    { value: 'gpt-5.4',       label: 'gpt-5.4' },
+    { value: 'gpt-5.5',       label: 'gpt-5.5' },
+    { value: 'gpt-5.4-mini',  label: 'gpt-5.4-mini' },
+    { value: 'gpt-5.3-codex', label: 'gpt-5.3-codex' },
+  ],
+  copilot: [
+    { value: 'claude-sonnet-4.6', label: 'claude sonnet 4.6' },
+    { value: 'claude-opus-4.7',   label: 'claude opus 4.7' },
+    { value: 'claude-opus-4.6',   label: 'claude opus 4.6' },
+    { value: 'gpt-5.5',           label: 'gpt-5.5' },
+    { value: 'gpt-5.4',           label: 'gpt-5.4' },
+  ],
+};
+
+function syncModelDropdown() {
+  const agent = $('agent').value;
+  const modelEl = $('model');
+  const opts = MODEL_OPTIONS[agent] || MODEL_OPTIONS.claude;
+  modelEl.innerHTML = opts.map((o, i) =>
+    `<option value="${o.value}"${i === 0 ? ' selected' : ''}>${o.label}</option>`
+  ).join('');
+  modelEl.disabled = opts.length === 1 && opts[0].value === '';
+}
+
+$('agent').addEventListener('change', syncModelDropdown);
+syncModelDropdown();
+
+// Replay auto-fire: if the page was opened with ?session=<id>, fetch the
+// saved prompt to populate the input, then trigger startThink. The session
+// param flows through to startThink, which routes EventSource to /api/replay.
+(function autofireReplay() {
+  const sid = new URLSearchParams(window.location.search).get('session');
+  if (!sid) return;
+  fetch('/api/sessions')
+    .then(r => r.json())
+    .then(list => {
+      const s = list.find(x => x.id === sid);
+      if (s) {
+        if (s.prompt) $('prompt').value = s.prompt;
+        if (s.model)  $('model').value  = s.model;
+        if (s.effort) $('effort').value = s.effort;
+        if (s.agent)  $('agent').value  = s.agent;
+        $('narrate').checked = !!s.narrate;
+      }
+    })
+    .catch(() => {})
+    .finally(() => setTimeout(startThink, 150));
+})();
+</script>
+</body>
+</html>

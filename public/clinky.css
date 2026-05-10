@@ -1,0 +1,632 @@
+/* clinky chrome — glass / minimal */
+/* shared across all modes. each mode provides its own canvas + body background */
+
+:root {
+  /* dark canvas (default) */
+  --fl-glass-bg: rgba(255, 255, 255, 0.08);
+  --fl-glass-border: rgba(255, 255, 255, 0.18);
+  --fl-glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  --fl-glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  --fl-text: #f5f1e8;
+  --fl-text-mute: rgba(245, 241, 232, 0.62);
+  --fl-text-faint: rgba(245, 241, 232, 0.4);
+  --fl-accent: #ffd860;
+  --fl-radius-pill: 28px;
+  --fl-radius-card: 18px;
+  --fl-radius-sm: 10px;
+}
+
+/* light canvas — chrome flips to dark-tinted glass + dark text */
+body.fl-canvas-light {
+  --fl-glass-bg: rgba(20, 22, 38, 0.10);
+  --fl-glass-border: rgba(20, 22, 38, 0.18);
+  --fl-glass-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  --fl-glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  --fl-text: #1a1a1a;
+  --fl-text-mute: rgba(26, 26, 26, 0.66);
+  --fl-text-faint: rgba(26, 26, 26, 0.45);
+  --fl-accent: #c87018;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  color: var(--fl-text);
+  font-family: 'Inter', 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  min-height: 100vh;
+}
+canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  cursor: crosshair;
+}
+
+/* --- generic chrome fade (legend, idle-fade) ---------------------------- */
+.chrome {
+  transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 100;
+}
+.chrome.faded {
+  opacity: 0;
+  pointer-events: none;
+}
+/* legend always visible — it's a persistent reference, not transient chrome */
+.topic-legend,
+.topic-legend.faded {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+/* counter pinned visible during active sessions; released 5s after done */
+body.fl-counter-pinned .node-counter,
+body.fl-counter-pinned .node-counter.faded {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+/* --- header auto-hide (revealed when cursor is near top) ---------------- */
+body.fl-header-hidden .prompt-pill,
+body.fl-header-hidden .mini-controls {
+  opacity: 0;
+  pointer-events: none;
+}
+/* counter joins the hide once released (not pinned) */
+body.fl-header-hidden:not(.fl-counter-pinned) .node-counter {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* --- prompt pill — top centre ------------------------------------------ */
+.prompt-pill {
+  position: fixed;
+  top: 1.4rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: var(--fl-glass-bg);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  border: 1px solid var(--fl-glass-border);
+  border-radius: var(--fl-radius-pill);
+  padding: 0.3rem 0.3rem 0.3rem 1.2rem;
+  width: min(520px, 60vw);
+  min-height: 42px;
+  box-shadow: var(--fl-glass-shadow), var(--fl-glass-inset);
+}
+.prompt-pill input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--fl-text);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 300;
+  letter-spacing: 0.005em;
+  outline: none;
+  min-width: 0;
+  transition: opacity 0.3s;
+}
+.prompt-pill input::placeholder { color: var(--fl-text-faint); font-weight: 300; }
+.prompt-pill.thinking input { opacity: 0.3; }
+.prompt-pill .think-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--fl-text);
+  font-size: 0.78rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.2s, border-color 0.2s, transform 0.2s;
+}
+.prompt-pill .think-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: scale(1.05);
+}
+.prompt-pill .think-btn.spinning {
+  animation: chrome-spin 1.2s linear infinite;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--fl-text-mute);
+}
+.prompt-pill .think-btn.hidden { display: none; }
+
+/* --- mini controls — top right (icon-only square buttons) -------------- */
+.mini-controls {
+  position: fixed;
+  top: 1.4rem;
+  right: 1.4rem;
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  background: var(--fl-glass-bg);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  border: 1px solid var(--fl-glass-border);
+  border-radius: var(--fl-radius-sm);
+  padding: 0.3rem;
+  box-shadow: var(--fl-glass-shadow), var(--fl-glass-inset);
+}
+.mini-controls button {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--fl-text-mute);
+  font-size: 0.85rem;
+  font-weight: 400;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.18s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mini-controls button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--fl-text);
+}
+.mini-controls button.active { color: var(--fl-accent); }
+.mini-controls button:disabled {
+  opacity: 0.22;
+  cursor: default;
+  pointer-events: none;
+}
+.mini-controls .sep {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 0 0.15rem;
+}
+
+/* --- node counter — top left (minimal text, no glass) ------------------ */
+.node-counter {
+  position: fixed;
+  top: 1.65rem;
+  left: 1.6rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fff;
+  mix-blend-mode: exclusion;
+  opacity: 0.45;
+  transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.node-counter.active {
+  opacity: 1;
+  text-shadow: 0 0 12px rgba(255,255,255,0.6);
+}
+
+/* --- topic legend — bottom right (unchanged behaviour) ----------------- */
+.topic-legend {
+  position: fixed;
+  bottom: 1.8rem;
+  right: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  align-items: flex-end;
+  mix-blend-mode: exclusion;
+}
+.topic-legend .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  color: #fff;
+  cursor: pointer;
+  opacity: 0.75;
+  transition: opacity 0.2s;
+}
+.topic-legend .legend-item:hover,
+.topic-legend .legend-item.legend-active { opacity: 1; text-shadow: 0 0 8px rgba(255,255,255,0.5); }
+.topic-legend .legend-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.topic-legend .legend-count {
+  color: inherit;
+  margin-left: 0.15rem;
+  opacity: 0.65;
+  transition: opacity 0.2s;
+}
+.topic-legend .legend-item:hover .legend-count,
+.topic-legend .legend-item[style*="opacity: 1"] .legend-count {
+  opacity: 1;
+}
+
+/* --- glass tooltip ----------------------------------------------------- */
+.fl-tooltip {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  background: var(--fl-glass-bg);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  border: 1px solid var(--fl-glass-border);
+  border-radius: var(--fl-radius-sm);
+  box-shadow: var(--fl-glass-shadow), var(--fl-glass-inset);
+  color: var(--fl-text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  line-height: 1.55;
+  padding: 0.6rem 0.8rem;
+  max-width: 340px;
+  opacity: 0;
+  transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.fl-tooltip .tt-topic { font-weight: 600; letter-spacing: 0.01em; color: var(--fl-text); }
+.fl-tooltip .tt-type {
+  color: var(--fl-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.6rem;
+  margin-left: 0.3rem;
+}
+.fl-tooltip .tt-text {
+  display: inline-block;
+  margin-top: 0.25rem;
+  color: var(--fl-text);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.fl-tooltip .tt-meta {
+  color: var(--fl-text-faint);
+  font-size: 0.58rem;
+  letter-spacing: 0.04em;
+}
+
+/* --- reading-pane essay overlay (mode-adopted palette + bg) ----------- */
+/* mode HTMLs declare per-essay vars on the .fl-essay element:           */
+/*   --e-bg, --e-text, --e-text-mute, --e-text-faint                     */
+/*   --e-rule, --e-narration, --e-pivot-tint, --e-accent                 */
+/* and one of the voice register classes: voice-{ambient,classical,jazz, */
+/* industrial,videogame}. Topic chips read --t-{topic} from the mode.    */
+
+.fl-essay-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 200;
+}
+.fl-essay-scrim.open { opacity: 1; pointer-events: auto; }
+
+.fl-essay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(640px, 92vw);
+  background: var(--e-bg, #1a0a0a);
+  color: var(--e-text, #f0e8d4);
+  z-index: 201;
+  transform: translateX(100%);
+  transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow-y: auto;
+}
+.fl-essay.open {
+  transform: translateX(0);
+  box-shadow: -16px 0 56px rgba(0, 0, 0, 0.6);
+}
+
+.fl-essay-page {
+  padding: 3rem 3rem 4rem;
+  line-height: 1.7;
+  max-width: 580px;
+  margin: 0 auto;
+}
+.fl-essay .essay-eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--e-text-faint, rgba(240, 232, 212, 0.45));
+  margin-bottom: 0.6rem;
+}
+.fl-essay h1.essay-title {
+  font-weight: 400;
+  font-size: 2rem;
+  line-height: 1.2;
+  letter-spacing: -0.005em;
+  color: var(--e-text, #f5ecd0);
+  margin-bottom: 1.4rem;
+}
+.fl-essay .essay-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  color: var(--e-text-faint, rgba(240, 232, 212, 0.48));
+  letter-spacing: 0.05em;
+  padding-bottom: 1.4rem;
+  border-bottom: 1px solid var(--e-rule, rgba(240, 232, 212, 0.14));
+}
+.fl-essay .essay-narration {
+  font-size: 1.05rem;
+  line-height: 1.65;
+  color: var(--e-narration, #ebd9a0);
+  margin: 1.8rem 0 1.4rem;
+  padding-left: 1.2rem;
+  border-left: 2px solid var(--e-narration, rgba(235, 217, 160, 0.35));
+}
+.fl-essay .essay-row {
+  display: flex;
+  gap: 0.8rem;
+  align-items: baseline;
+  padding: 0.55rem 0;
+  border-bottom: 1px dotted var(--e-rule, rgba(240, 232, 212, 0.1));
+  font-size: 1rem;
+}
+.fl-essay .essay-row .row-id {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  color: var(--e-text-faint, rgba(240, 232, 212, 0.45));
+  flex-shrink: 0;
+  min-width: 22px;
+}
+.fl-essay .essay-row .row-topic {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
+  margin-top: 0.4rem;
+  background: currentColor;
+}
+.fl-essay .essay-row .row-text {
+  flex: 1;
+  color: var(--e-text, #f0e8d4);
+  line-height: 1.6;
+}
+.fl-essay .essay-row .row-type {
+  display: block;
+  margin-top: 0.2rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--e-text-faint, rgba(240, 232, 212, 0.45));
+}
+.fl-essay .essay-pivot { background: var(--e-pivot-tint, rgba(235, 217, 160, 0.06)); }
+.fl-essay .essay-pivot .row-text { color: var(--e-text, #f5ecd0); }
+
+.fl-essay .essay-closing {
+  margin-top: 2rem;
+  padding: 1.5rem 1.6rem;
+  background: var(--e-pivot-tint, rgba(90, 42, 42, 0.4));
+  border-left: 3px solid var(--e-accent, #c2562a);
+  font-size: 1.18rem;
+  line-height: 1.55;
+  color: var(--e-text, #f5ecd0);
+}
+.fl-essay .essay-closing .closing-eyebrow {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-style: normal;
+  font-size: 0.55rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--e-text-faint, rgba(240, 232, 212, 0.5));
+  margin-bottom: 0.5rem;
+  font-weight: 400;
+}
+.fl-essay .essay-colophon {
+  margin-top: 2.5rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--e-rule, rgba(240, 232, 212, 0.14));
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.55rem;
+  letter-spacing: 0.06em;
+  color: var(--e-text-faint, rgba(240, 232, 212, 0.4));
+  line-height: 1.7;
+}
+.fl-essay .essay-reflections {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--e-rule, rgba(240, 232, 212, 0.14));
+}
+.fl-essay .essay-reflection {
+  font-style: italic;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--e-text, #f5ecd0);
+  margin-bottom: 1.2rem;
+}
+.fl-essay .essay-reflection:last-child { margin-bottom: 0; }
+.fl-essay .essay-reflection .reflection-eyebrow {
+  display: block;
+  font-style: normal;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  color: var(--e-accent, #c2562a);
+  margin-bottom: 0.6rem;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.fl-essay-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--e-rule, rgba(240, 232, 212, 0.18));
+  background: var(--e-pivot-tint, rgba(240, 232, 212, 0.06));
+  color: var(--e-text-mute, rgba(240, 232, 212, 0.7));
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  transition: all 0.2s;
+  z-index: 1;
+}
+.fl-essay-close:hover {
+  background: var(--e-pivot-tint, rgba(240, 232, 212, 0.14));
+  color: var(--e-text, #f5ecd0);
+}
+.fl-essay-print {
+  position: absolute;
+  top: 1rem;
+  right: 3.4rem;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--e-rule, rgba(240, 232, 212, 0.18));
+  background: var(--e-pivot-tint, rgba(240, 232, 212, 0.06));
+  color: var(--e-text-mute, rgba(240, 232, 212, 0.7));
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  transition: all 0.2s;
+  z-index: 1;
+}
+.fl-essay-print:hover {
+  background: var(--e-pivot-tint, rgba(240, 232, 212, 0.14));
+  color: var(--e-text, #f5ecd0);
+}
+
+/* --- voice registers --------------------------------------------------- */
+.fl-essay.voice-ambient {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+}
+.fl-essay.voice-ambient h1.essay-title { font-style: italic; }
+.fl-essay.voice-ambient .essay-narration { font-style: italic; }
+.fl-essay.voice-ambient .essay-closing { font-style: italic; }
+
+.fl-essay.voice-classical {
+  font-family: Georgia, 'Cormorant Garamond', serif;
+  font-weight: 400;
+}
+.fl-essay.voice-classical h1.essay-title { font-weight: 500; }
+
+.fl-essay.voice-jazz {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 400;
+}
+
+.fl-essay.voice-industrial {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 400;
+}
+.fl-essay.voice-industrial h1.essay-title {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 500;
+  font-size: 1.6rem;
+  letter-spacing: -0.01em;
+}
+.fl-essay.voice-industrial .essay-row { font-size: 0.88rem; }
+.fl-essay.voice-industrial .essay-narration {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.9rem;
+}
+.fl-essay.voice-industrial .essay-closing {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.95rem;
+}
+
+.fl-essay.voice-videogame {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 400;
+}
+
+/* --- error banner — bottom centre, persistent until dismissed ----------- */
+.fl-error-banner {
+  position: fixed;
+  bottom: 2.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(180, 40, 40, 0.18);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  border: 1px solid rgba(220, 80, 80, 0.35);
+  border-radius: var(--fl-radius-pill);
+  padding: 0.45rem 0.5rem 0.45rem 1.1rem;
+  max-width: min(520px, 80vw);
+  z-index: 500;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.fl-error-banner.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.fl-error-banner .fl-error-msg {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--fl-text);
+  flex: 1;
+  line-height: 1.45;
+}
+.fl-error-banner .fl-error-dismiss {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid rgba(220, 80, 80, 0.3);
+  background: rgba(220, 80, 80, 0.12);
+  color: var(--fl-text);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.fl-error-banner .fl-error-dismiss:hover { background: rgba(220, 80, 80, 0.28); }
+
+@keyframes chrome-spin { to { transform: rotate(360deg); } }
+
+/* --- prefers-reduced-motion ------------------------------------------- */
+/* Users who declare a preference against motion get static chrome and    */
+/* no slide-in animation on the essay panel.                               */
+@media (prefers-reduced-motion: reduce) {
+  .fl-essay,
+  .fl-essay-scrim,
+  .prompt-pill,
+  .mini-controls,
+  .node-counter,
+  .topic-legend,
+  .chrome {
+    transition: none !important;
+    animation: none !important;
+  }
+  .prompt-pill .think-btn.spinning {
+    animation: none !important;
+  }
+}

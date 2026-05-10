@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>clinky — thinking made visible</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --paper: #f5f1e8; --ink: #0a0a0a; --red: #e63946; --yellow: #ffd60a; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--paper); color: var(--ink); font-family: 'Space Grotesk', sans-serif; padding: 6vh 5vw; max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 3rem; font-weight: 700; letter-spacing: -0.03em; text-transform: lowercase; margin-bottom: 1rem; }
+  .sub { font-size: 1.1rem; line-height: 1.55; margin-bottom: 3rem; max-width: 54ch; }
+  .section { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.15em; color: var(--red); margin: 2.5rem 0 1rem; }
+  .modes { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.75rem; }
+  a.mode { display: block; padding: 1.25rem; background: #fff; border: 1.5px solid var(--ink); text-decoration: none; color: var(--ink); transition: background 0.15s; }
+  a.mode:hover { background: var(--yellow); }
+  a.mode h2 { font-size: 1.2rem; font-weight: 500; text-transform: lowercase; margin-bottom: 0.25rem; }
+  a.mode p { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: #777; margin: 0; line-height: 1.5; }
+  ::selection { background: var(--yellow); }
+</style>
+</head>
+<body>
+<h1>clinky</h1>
+<p class="sub">thirty-one ways to see thinking. type a question, watch it grow. each mode renders the same thought structure as a completely different visual and sonic form.</p>
+
+<div class="section">field & canvas</div>
+<div class="modes">
+  <a class="mode" href="/marko"><h2>marko</h2><p>color fields — weight, pressure, bands of meaning, no shapes</p></a>
+  <a class="mode" href="/splatter"><h2>splatter</h2><p>splatter paint — tangled webs of lines and drops, action painting</p></a>
+  <a class="mode" href="/ink"><h2>ink</h2><p>sumi-e calligraphy — each thought is a brush stroke on cream paper, ink bleeds outward</p></a>
+  <a class="mode" href="/concrete"><h2>concrete</h2><p>concrete poetry — text arranges itself as shapes</p></a>
+  <a class="mode" href="/mycelium"><h2>mycelium</h2><p>fungal network — nodes glow, hyphae grow between them</p></a>
+</div>
+
+<div class="section">sky & cosmos</div>
+<div class="modes">
+  <a class="mode" href="/galaxy"><h2>galaxy</h2><p>spiral arms rotating — thoughts as stars placed by topic</p></a>
+  <a class="mode" href="/constellation"><h2>constellation</h2><p>stars cluster by topic. draw your own lines to connect them.</p></a>
+</div>
+
+<div class="section">physics & emergence</div>
+<div class="modes">
+  <a class="mode" href="/gravity"><h2>gravity</h2><p>physics sim — shapes attract and repel, structure emerges</p></a>
+  <a class="mode" href="/antmin"><h2>antmin</h2><p>thought swarm — tiny creatures cluster, march, wilt, stack</p></a>
+  <a class="mode" href="/conway"><h2>conway</h2><p>game of life — thoughts seed patterns, interact, survive or die</p></a>
+  <a class="mode" href="/bounce"><h2>bounce</h2><p>thoughts drop and bounce off topic platforms. platforms glow on impact.</p></a>
+  <a class="mode" href="/tracer"><h2>tracer</h2><p>tiny swimmers leave trails. drag to create currents.</p></a>
+  <a class="mode" href="/snowfall"><h2>snowfall</h2><p>crystal thoughts drift down and accumulate. the pile is the answer.</p></a>
+  <a class="mode" href="/loop"><h2>loop</h2><p>spinning rings of light. points orbit. overlapping glow creates patterns.</p></a>
+</div>
+
+<div class="section">grid & geometry</div>
+<div class="modes">
+  <a class="mode" href="/luminaria"><h2>luminaria</h2><p>arrows on a grid. particles follow them in loops. click to change direction.</p></a>
+  <a class="mode" href="/sequencer"><h2>sequencer</h2><p>a step sequencer. rows are topics. the playhead loops. click cells to toggle.</p></a>
+  <a class="mode" href="/loom"><h2>loom</h2><p>weaving — warp threads fixed, weft rows are thoughts, patterns emerge per topic</p></a>
+  <a class="mode" href="/subway"><h2>subway</h2><p>transit map — each topic is a coloured line, thoughts are stations</p></a>
+  <a class="mode" href="/clockwork"><h2>clockwork</h2><p>meshing gears — each topic is a gear, thoughts pulse the rotation</p></a>
+  <a class="mode" href="/city"><h2>city</h2><p>isometric city grows — topics are districts, confidence is height</p></a>
+</div>
+
+<div class="section">data & structure</div>
+<div class="modes">
+  <a class="mode" href="/attention"><h2>attention</h2><p>transformer attention matrix — every thought vs every thought, cell brightness = relationship</p></a>
+  <a class="mode" href="/dendrogram"><h2>dendrogram</h2><p>hierarchical cluster tree — thoughts merge into sub-clusters, up into super-clusters</p></a>
+  <a class="mode" href="/waveform"><h2>waveform</h2><p>oscilloscope trace — per-topic lanes, each thought creates a typed burst on the signal</p></a>
+  <a class="mode" href="/chord"><h2>chord</h2><p>circular arc diagram — thoughts on the circumference, chords inside connect related pairs</p></a>
+</div>
+
+<div class="section">frame & chart</div>
+<div class="modes">
+  <a class="mode" href="/mindmap"><h2>mindmap</h2><p>central prompt, radial branches per topic, thoughts fork along each branch</p></a>
+  <a class="mode" href="/stickies"><h2>stickies</h2><p>wall of post-its — each thought is a tilted coloured square on white</p></a>
+  <a class="mode" href="/swot"><h2>swot</h2><p>2×2 strengths / weaknesses / opportunities / threats, resolutions in the centre strip</p></a>
+  <a class="mode" href="/fishbone"><h2>fishbone</h2><p>ishikawa diagram — spine points at the effect, diagonal bones are topics</p></a>
+  <a class="mode" href="/pyramid"><h2>pyramid</h2><p>minto principle — answer at apex, arguments in middle, evidence at the base</p></a>
+  <a class="mode" href="/matrix"><h2>matrix</h2><p>impact × confidence scatter, quick-wins / major-projects / money-pits / fill-ins</p></a>
+  <a class="mode" href="/journey"><h2>journey</h2><p>customer journey emotion curve across awareness → advocacy phases</p></a>
+</div>
+
+<div class="section">archive</div>
+<div class="modes">
+  <a class="mode" href="/sessions.html"><h2>sessions</h2><p>every session you've run, recorded and replayable into any mode</p></a>
+  <a class="mode" href="/inspect"><h2>inspect</h2><p>live diagnostic — coverage panel, raw stream, schema acceptance test</p></a>
+</div>
+
+</body>
+</html>

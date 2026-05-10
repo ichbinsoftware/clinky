@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>clinky — sessions</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root { --paper: #f5f1e8; --ink: #0a0a0a; --red: #e63946; --yellow: #ffd60a; --mute: #777; --done: #2a9d8f; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--paper); color: var(--ink); font-family: 'Space Grotesk', sans-serif; padding: 6vh 5vw; max-width: 1100px; margin: 0 auto; }
+  a { color: var(--ink); }
+  ::selection { background: var(--yellow); }
+
+  h1 { font-size: 3rem; font-weight: 700; letter-spacing: -0.03em; text-transform: lowercase; margin-bottom: 1rem; }
+  .sub { font-size: 1.1rem; line-height: 1.55; margin-bottom: 2rem; max-width: 70ch; }
+  .sub code, .empty code { font-family: 'JetBrains Mono', monospace; font-size: 0.85em; background: #fff; padding: 0.05em 0.35em; border: 1px solid #e0d8c8; }
+  .section { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.15em; color: var(--red); margin: 2rem 0 0.75rem; }
+
+  .controls { display: flex; gap: 0.5rem; align-items: center; background: #fff; border: 1.5px solid var(--ink); padding: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+  .controls input { flex: 1; min-width: 180px; border: none; outline: none; font-family: 'Space Grotesk', sans-serif; font-size: 0.95rem; padding: 0.5rem 0.8rem; background: transparent; color: var(--ink); }
+  .controls label { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--mute); text-transform: uppercase; letter-spacing: 0.08em; }
+  .controls select { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; background: #fff; border: 1px solid var(--ink); padding: 0.3rem 0.45rem; cursor: pointer; }
+
+  .row { display: grid; grid-template-columns: 1fr 200px 110px; gap: 1rem; align-items: start; padding: 1rem 1.25rem; background: #fff; border: 1.5px solid var(--ink); margin-bottom: 0.5rem; }
+  .row:hover { background: #fffaeb; }
+  .row .prompt { font-size: 1rem; font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
+  .row .meta { display: flex; flex-wrap: wrap; gap: 0.3rem; font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 0.4rem; }
+  .row .meta span { padding: 1px 6px; background: #f0ece0; color: #555; border-radius: 2px; }
+  .row .meta span.narr { background: #d4f0ea; color: #1b7f72; }
+  .row .meta span.agent { background: var(--ink); color: var(--paper); }
+  .row .meta span.mode { background: #fffbd9; color: #6b5d00; }
+  .row .stats { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--mute); line-height: 1.55; text-align: right; }
+  .row .stats .big { color: var(--ink); font-weight: 700; font-size: 0.85rem; }
+  .row .when { font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; color: var(--mute); margin-top: 0.3rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .row .replay { display: flex; flex-direction: column; gap: 0.25rem; align-items: stretch; }
+  .row button { background: var(--ink); color: var(--paper); border: none; font-family: 'Space Grotesk', sans-serif; font-size: 0.78rem; padding: 0.5rem 0.6rem; cursor: pointer; text-transform: lowercase; }
+  .row button:hover { background: var(--red); }
+  .row button.alt { background: #fff; color: var(--ink); border: 1px solid var(--ink); }
+  .row button.alt:hover { background: var(--yellow); }
+
+  .empty { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--mute); text-align: center; padding: 4rem 0; }
+  .empty a { text-decoration: underline; }
+
+  @media (max-width: 700px) {
+    .row { grid-template-columns: 1fr; }
+    .row .stats { text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+<h1>sessions</h1>
+<p class="sub">opt-in archive of past prompts. tick <code>record</code> in <a href="/inspect">/inspect</a> (or pass <code>?record=1</code> on any mode URL, or start the server with <code>--record</code>) to save a session as JSONL. saved sessions appear here and replay into any mode without spawning the agent again.</p>
+
+<div class="controls">
+  <input id="filter" type="text" placeholder="filter by prompt…" />
+  <label>replay into</label>
+  <select id="mode">
+    <option value="inspect" selected>inspect</option>
+    <option value="chord">chord</option>
+    <option value="attention">attention</option>
+    <option value="mindmap">mindmap</option>
+    <option value="dendrogram">dendrogram</option>
+    <option value="waveform">waveform</option>
+    <option value="pyramid">pyramid</option>
+    <option value="matrix">matrix</option>
+    <option value="journey">journey</option>
+    <option value="fishbone">fishbone</option>
+    <option value="swot">swot</option>
+    <option value="stickies">stickies</option>
+    <option value="subway">subway</option>
+    <option value="constellation">constellation</option>
+    <option value="galaxy">galaxy</option>
+    <option value="mycelium">mycelium</option>
+    <option value="marko">marko</option>
+    <option value="splatter">splatter</option>
+    <option value="ink">ink</option>
+    <option value="concrete">concrete</option>
+    <option value="loop">loop</option>
+    <option value="loom">loom</option>
+    <option value="city">city</option>
+    <option value="clockwork">clockwork</option>
+    <option value="luminaria">luminaria</option>
+    <option value="sequencer">sequencer</option>
+    <option value="snowfall">snowfall</option>
+    <option value="bounce">bounce</option>
+    <option value="tracer">tracer</option>
+    <option value="conway">conway</option>
+    <option value="antmin">antmin</option>
+    <option value="gravity">gravity</option>
+  </select>
+  <label>speed</label>
+  <select id="speed">
+    <option value="0">instant</option>
+    <option value="4" selected>4×</option>
+    <option value="2">2×</option>
+    <option value="1">real-time</option>
+  </select>
+</div>
+
+<div class="section" id="count-label">loading…</div>
+<div id="list"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const listEl = $('list');
+let sessions = [];
+
+function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function fmtDuration(ms) {
+  if (ms == null) return '—';
+  if (ms < 1000) return ms + 'ms';
+  if (ms < 60_000) return (ms / 1000).toFixed(1) + 's';
+  return Math.floor(ms / 60_000) + 'm ' + Math.round((ms % 60_000) / 1000) + 's';
+}
+
+function fmtRelative(iso) {
+  if (!iso) return '—';
+  const then = new Date(iso).getTime();
+  const diff = Date.now() - then;
+  if (diff < 60_000) return 'just now';
+  if (diff < 3_600_000) return Math.floor(diff / 60_000) + ' min ago';
+  if (diff < 86_400_000) return Math.floor(diff / 3_600_000) + 'h ago';
+  if (diff < 7 * 86_400_000) return Math.floor(diff / 86_400_000) + 'd ago';
+  return new Date(iso).toLocaleDateString();
+}
+
+function render() {
+  const q = $('filter').value.trim().toLowerCase();
+  const filtered = q ? sessions.filter(s => (s.prompt || '').toLowerCase().includes(q)) : sessions;
+  $('count-label').textContent = filtered.length === sessions.length
+    ? `${sessions.length} session${sessions.length === 1 ? '' : 's'}`
+    : `${filtered.length} of ${sessions.length}`;
+  if (!filtered.length) {
+    listEl.innerHTML = `<div class="empty">no sessions yet — recording is opt-in. tick <strong>record</strong> in <a href="/inspect">/inspect</a> or append <code>?record=1</code> to any mode URL, run a prompt, then come back.</div>`;
+    return;
+  }
+  listEl.innerHTML = '';
+  for (const s of filtered) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const cost = s.cost_usd != null ? '$' + s.cost_usd.toFixed(4) : '—';
+    row.innerHTML = `
+      <div>
+        <div class="prompt">${escapeHtml(s.prompt || '(no prompt)')}</div>
+        <div class="meta">
+          ${s.agent  ? `<span class="agent">${escapeHtml(s.agent)}</span>`   : ''}
+          ${s.model  ? `<span>${escapeHtml(s.model)}</span>`                 : ''}
+          ${s.effort ? `<span>effort ${escapeHtml(s.effort)}</span>`         : ''}
+          ${s.narrate ? `<span class="narr">narrate</span>`                  : ''}
+          ${s.mode   ? `<span class="mode">mode ${escapeHtml(s.mode)}</span>` : ''}
+        </div>
+        <div class="when">${escapeHtml(fmtRelative(s.started_at))}</div>
+      </div>
+      <div class="stats">
+        <div><span class="big">${s.node_count}</span> nodes</div>
+        <div>${fmtDuration(s.duration_ms)}</div>
+        <div>${cost}</div>
+      </div>
+      <div class="replay">
+        <button data-replay="${escapeHtml(s.id)}">replay ▶</button>
+        <button class="alt" data-inspect="${escapeHtml(s.id)}">inspect</button>
+      </div>
+    `;
+    listEl.appendChild(row);
+  }
+}
+
+function buildReplayUrl(id, mode) {
+  const speed = $('speed').value;
+  return `/${mode}?session=${encodeURIComponent(id)}&speed=${speed}`;
+}
+
+listEl.addEventListener('click', e => {
+  const replayBtn = e.target.closest('[data-replay]');
+  if (replayBtn) {
+    const mode = $('mode').value;
+    window.location.href = buildReplayUrl(replayBtn.dataset.replay, mode);
+    return;
+  }
+  const inspectBtn = e.target.closest('[data-inspect]');
+  if (inspectBtn) {
+    window.location.href = buildReplayUrl(inspectBtn.dataset.inspect, 'inspect');
+  }
+});
+
+$('filter').addEventListener('input', render);
+
+fetch('/api/sessions')
+  .then(r => r.json())
+  .then(data => { sessions = data; render(); })
+  .catch(() => { listEl.innerHTML = `<div class="empty">could not load sessions.</div>`; });
+</script>
+
+</body>
+</html>
