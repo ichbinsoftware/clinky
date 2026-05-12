@@ -1,15 +1,18 @@
 # clinky — thinking made visible
 
+[![npm version](https://img.shields.io/npm/v/@ichbinsoftware/clinky.svg?style=flat-square)](https://www.npmjs.com/package/@ichbinsoftware/clinky)
+[![license](https://img.shields.io/npm/l/@ichbinsoftware/clinky.svg?style=flat-square)](https://github.com/ichbinsoftware/clinky/blob/main/LICENSE)
+[![node version](https://img.shields.io/node/v/@ichbinsoftware/clinky.svg?style=flat-square)](https://nodejs.org)
+
 <div align="center">
   <img src="icons/clinky.png" width="450" alt="clinky">
   <br/>
 </div>  
 
-<p align="center">
-  <a href="https://www.npmjs.com/package/@ichbinsoftware/clinky"><img src="https://img.shields.io/npm/v/@ichbinsoftware/clinky.svg?style=flat-square" alt="npm version"></a>
-  <a href="https://github.com/ichbinsoftware/clinky/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/@ichbinsoftware/clinky.svg?style=flat-square" alt="license"></a>
-  <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/@ichbinsoftware/clinky.svg?style=flat-square" alt="node version"></a>
-</p>
+<div align="center">
+  <img src="icons/clinky.gif" width="960" alt="clinky-anim">
+  <br/>
+</div>  
 
 A visual and sonic surface for AI thinking. Works with **claude**, **copilot**, and **codex** — the three major "c" CLI agents. The name: *cli + thinking = clinky*.
 
