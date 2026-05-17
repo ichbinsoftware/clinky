@@ -32,6 +32,8 @@ export class Mode {
     this._topicFallbackColor = topicFallbackColor;
     this._auralReady         = false;
 
+    Object.entries(vars).forEach(([k, v]) => document.body.style.setProperty(k, v));
+
     // canvas
     this.canvas = document.getElementById('canvas');
     this.ctx    = this.canvas.getContext('2d');

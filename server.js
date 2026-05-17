@@ -21,7 +21,7 @@ function loadEnv(filepath) {
 loadEnv(path.join(os.homedir(), '.clinky', '.env'));
 loadEnv(path.join(process.cwd(), '.env'));
 
-import { runWithProvider, SESSIONS_DIR } from './agents/shared.js';
+import { runWithProvider, SESSIONS_DIR, MODE_PALETTES, DEFAULT_COLORS } from './agents/shared.js';
 import { claude }   from './agents/claude.js';
 import { copilot }  from './agents/copilot.js';
 import { codex }    from './agents/codex.js';
@@ -158,6 +158,8 @@ const server = http.createServer(async (req, res) => {
     }
     const speedRaw = u.searchParams.get('speed');
     const speed = speedRaw == null ? 4 : Number(speedRaw);  // 0 = instant
+    const replayMode = u.searchParams.get('mode') || '';
+    const COLORS = MODE_PALETTES[replayMode] || DEFAULT_COLORS;
 
     // Read async — don't block the event loop while loading the session file.
     let raw;
@@ -183,13 +185,27 @@ const server = http.createServer(async (req, res) => {
       } catch {}
     }
 
+    if (speed > 0) {
+      const firstNode = events.find(e => e.event === 'node');
+      if (firstNode) {
+        const offset = Math.max(0, firstNode.t - 5000 * speed);
+        if (offset > 0) {
+          for (const e of events) e.t = Math.max(0, e.t - offset);
+        }
+      }
+    }
+
     let i = 0;
     function emitNext() {
       if (cancelled) { try { res.end(); } catch {} return; }
       if (i >= events.length) { try { res.end(); } catch {} return; }
       const ev = events[i++];
       // Respect backpressure — wait for drain if buffer is full
-      const ok = res.write(`event: ${ev.event}\ndata: ${JSON.stringify(ev.data)}\n\n`);
+      let data = ev.data;
+      if (ev.event === 'topics' && Array.isArray(data)) {
+        data = data.map((t, i) => ({ ...t, color: COLORS[i % COLORS.length] }));
+      }
+      const ok = res.write(`event: ${ev.event}\ndata: ${JSON.stringify(data)}\n\n`);
       if (!ok) { res.once('drain', emitNext); return; }
       if (i >= events.length) { setImmediate(emitNext); return; }
       if (speed === 0) { setImmediate(emitNext); return; }

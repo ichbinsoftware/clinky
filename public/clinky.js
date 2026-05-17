@@ -32,6 +32,7 @@ export function startStream(prompt, { onTopics, onNode, onDone, onError, onStatu
     const speed = pageParams.get('speed');
     const replayParams = new URLSearchParams();
     if (speed != null) replayParams.set('speed', speed);
+    if (mode) replayParams.set('mode', mode);
     esUrl = `/api/replay/${encodeURIComponent(sessionId)}${replayParams.toString() ? '?' + replayParams : ''}`;
     console.log(`[clinky] replay ${sessionId}${speed != null ? ` @ ${speed}×` : ''}`);
   } else {

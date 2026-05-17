@@ -219,7 +219,6 @@ body.fl-header-hidden:not(.fl-counter-pinned) .node-counter {
   flex-direction: column;
   gap: 0.2rem;
   align-items: flex-end;
-  mix-blend-mode: exclusion;
 }
 .topic-legend .legend-item {
   display: flex;
@@ -229,7 +228,7 @@ body.fl-header-hidden:not(.fl-counter-pinned) .node-counter {
   text-transform: uppercase;
   font-size: 0.65rem;
   letter-spacing: 0.06em;
-  color: #fff;
+  color: var(--fl-text);
   cursor: pointer;
   opacity: 0.75;
   transition: opacity 0.2s;

@@ -1,24 +1,24 @@
+<div align="center">
+  <img src="icons/clinky.png" width="120" alt="clinky">
+</div>
+
 # clinky — thinking made visible
 
 [![npm version](https://img.shields.io/npm/v/@ichbinsoftware/clinky.svg?style=flat-square)](https://www.npmjs.com/package/@ichbinsoftware/clinky)
 [![license](https://img.shields.io/npm/l/@ichbinsoftware/clinky.svg?style=flat-square)](https://github.com/ichbinsoftware/clinky/blob/main/LICENSE)
 [![node version](https://img.shields.io/node/v/@ichbinsoftware/clinky.svg?style=flat-square)](https://nodejs.org)
 
-<div align="center">
-  <img src="icons/clinky.png" width="450" alt="clinky">
-  <br/>
-</div>  
-
-<div align="center">
-  <img src="icons/clinky.gif" width="960" alt="clinky-anim">
-  <br/>
-</div>  
-
-A visual and sonic surface for AI thinking. Works with **claude**, **copilot**, and **codex** — the three major "c" CLI agents. The name: *cli + thinking = clinky*.
+A visual and sonic surface for AI thinking. Works with **claude**, **copilot**, and **codex**. The name: *cli + thinking = clinky*.
 
 Not a chat interface. Not a document. A living map of how a thought unfolds — branches, choices, narrowings, dead ends, resolutions — rendered as something you'd want to look at and listen to.
 
-**Demo:** https://clinky-demo.ichbinsoftware.com/ — replays of pre-recorded sessions. Install locally to run your own prompts.
+## Demo
+
+<div align="center">
+  <img src="icons/clinky.gif" width="800" alt="clinky-anim">
+</div>
+
+_Live replays at [clinky-demo.ichbinsoftware.com](https://clinky-demo.ichbinsoftware.com/) — install locally to run your own prompts._
 
 ## Install
 
@@ -38,6 +38,7 @@ Open **http://localhost:4243** in your browser (substitute your `--port` if you 
 ### Flags
 
 ```bash
+clinky --open                        # also opens the browser for you
 clinky --agent copilot               # use GitHub Copilot CLI
 clinky --agent codex                 # use OpenAI Codex CLI
 clinky --model claude-opus-4-7       # override the default model for the chosen agent
@@ -46,7 +47,9 @@ clinky --record                      # save every session to ~/.clinky/sessions/
 clinky --verbose                     # log every node arrival to stderr
 ```
 
-`?agent=` and `?model=` on any URL override the defaults for that request — switch backends or models mid-session from `/inspect` without restarting.
+Recorded sessions are listed at `/api/sessions`. Replay any via `/api/replay/<id>` — append `?speed=` (default 4×, 0 = instant) to control playback rate.
+
+`?agent=` and `?model=` on any URL override the defaults for that request — use them from `/inspect` to make a new request with a different backend or model without restarting.
 
 ### Requirements
 
@@ -103,7 +106,8 @@ The Bash commands are never executed. The call is a delivery mechanism — the s
 - **rel:** `supports` | `contradicts` | `synthesizes` | `refines` | `questions` | `supersedes` (required when `refs` is set)
 - **because:** array of prior ids, or `"external"` / `"prior"` (required on `claim`, `choice`, `resolution`)
 - **heat:** 0–1 — reserved for unexpected or consequential moves
-- **topics:** 4–8 per response, each with a stable color and a pentatonic note
+
+Each response carries 4–8 **topics**, each assigned a stable color and a pentatonic note for the session.
 
 Server-stamped on every node: `batch_id`, `batch_position`, `elapsed_ms`, `incoming_refs_count` (how many later thoughts reference this one — delivered via a separate `graph` SSE event).
 
@@ -233,7 +237,9 @@ server.js
   ├─ GET /                → mode picker
   ├─ GET /<mode>          → mode page
   ├─ GET /inspect         → diagnostic stream viewer
-  └─ GET /api/think?prompt=&mode=&model=&effort=&agent=  → SSE stream
+  ├─ GET /api/think?prompt=&mode=&model=&effort=&agent=  → SSE stream
+  ├─ GET /api/sessions    → list recorded sessions
+  └─ GET /api/replay/<id>?speed=&mode=  → replay a recorded session
 
 agents/ (one file per backend)
   ├─ shared.js     ← SYSTEM_PROMPT, extractAndEmitNodes, runWithProvider
