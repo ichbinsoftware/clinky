@@ -2,12 +2,22 @@
 
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import url from 'node:url';
 import crypto from 'node:crypto';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 export const SESSIONS_DIR = path.join(__dirname, '..', 'sessions');
+
+// Empty scratch dir the agent CLIs spawn in. All three CLIs auto-load project
+// docs (CLAUDE.md / AGENTS.md) from their cwd — spawning from flow/ would feed
+// clinky's own architecture docs into every thinking session, costing tokens
+// and invalidating the prompt cache whenever the docs change.
+let SCRATCH_DIR = null;
+try {
+  SCRATCH_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'clinky-'));
+} catch { /* fall back to inherited cwd */ }
 
 // --- prompts ---
 
@@ -108,30 +118,42 @@ const NOTES_LIST = [261.63, 293.66, 329.63, 370, 415.30, 466.16, 523.25, 587.33]
 
 // --- node extractor ---
 
-export function extractAndEmitNodes(text, emitNode) {
-  for (let i = 0; i < text.length; i++) {
-    if (text[i] === '{') {
-      // String-aware brace scanner — skips braces inside JSON string literals
-      // so "text":"if x { return y }" no longer corrupts the depth count.
-      let depth = 0, j = i, inStr = false, escape = false;
-      for (; j < text.length; j++) {
-        const c = text[j];
-        if (escape) { escape = false; continue; }
-        if (c === '\\' && inStr) { escape = true; continue; }
-        if (c === '"') { inStr = !inStr; continue; }
-        if (inStr) continue;
-        if (c === '{') depth++;
-        if (c === '}') depth--;
-        if (depth === 0) break;
-      }
-      if (depth !== 0) continue;
-      try {
-        const node = JSON.parse(text.slice(i, j + 1));
-        if (node.topic || node.text) emitNode(node);
-      } catch {}
-      i = j;
+// Scan `text` from `from` for complete top-level JSON objects that look like
+// thought nodes (have topic or text). Returns the matching object strings plus
+// `consumedTo`, the offset scanning can safely resume from on the next call —
+// which makes this usable incrementally over a growing buffer: an incomplete
+// trailing object stops the scan and is retried once more text arrives.
+export function extractNodeStrings(text, from = 0) {
+  const found = [];
+  let consumedTo = from;
+  for (let i = from; i < text.length; i++) {
+    if (text[i] !== '{') continue;
+    // String-aware brace scanner — skips braces inside JSON string literals
+    // so "text":"if x { return y }" no longer corrupts the depth count.
+    let depth = 0, j = i, inStr = false, escape = false;
+    for (; j < text.length; j++) {
+      const c = text[j];
+      if (escape) { escape = false; continue; }
+      if (c === '\\' && inStr) { escape = true; continue; }
+      if (c === '"') { inStr = !inStr; continue; }
+      if (inStr) continue;
+      if (c === '{') depth++;
+      if (c === '}') depth--;
+      if (depth === 0) break;
     }
+    if (depth !== 0) return { found, consumedTo: i }; // incomplete — resume here
+    try {
+      const node = JSON.parse(text.slice(i, j + 1));
+      if (node.topic || node.text) found.push(text.slice(i, j + 1));
+    } catch {}
+    i = j;
+    consumedTo = j + 1;
   }
+  return { found, consumedTo };
+}
+
+export function extractAndEmitNodes(text, emitNode) {
+  for (const s of extractNodeStrings(text).found) emitNode(JSON.parse(s));
 }
 
 // --- session recorder ---
@@ -208,10 +230,20 @@ export function runWithProvider(provider, req, res, prompt, mode, model, effort,
   const origWrite = res.write.bind(res);
   res.write = (chunk, ...rest) => { recorder.capture(chunk); return origWrite(chunk, ...rest); };
 
+  // Per-session parser context: parseLine is invoked on a fresh object whose
+  // prototype is the provider, so any state a provider keeps on `this` (e.g.
+  // copilot's usage counters) is scoped to this run instead of being shared
+  // across concurrent sessions.
+  const parser = Object.create(provider);
+
   let child;
   try {
     const { cmd, args } = provider.spawn(prompt, model, effort);
-    child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    child = spawn(cmd, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      ...(SCRATCH_DIR ? { cwd: SCRATCH_DIR } : {}),
+      env: { ...process.env, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' },
+    });
   } catch {
     res.write(`event: error\ndata: ${JSON.stringify({ error: `${provider.name} not found` })}\n\n`);
     res.write(`event: done\ndata: {}\n\n`);
@@ -307,7 +339,7 @@ export function runWithProvider(provider, req, res, prompt, mode, model, effort,
       const line = buf.slice(0, nl).trim();
       buf = buf.slice(nl + 1);
       if (!line) continue;
-      for (const action of provider.parseLine(line)) {
+      for (const action of parser.parseLine(line)) {
         switch (action.type) {
           case 'pendingThinking':
             pendingThinking += action.text;
