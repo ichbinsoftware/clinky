@@ -185,6 +185,8 @@ const server = http.createServer(async (req, res) => {
       } catch {}
     }
 
+    // Shift timestamps so the first node arrives at ~5s wall-clock regardless
+    // of how long the original model took before its first thought.
     if (speed > 0) {
       const firstNode = events.find(e => e.event === 'node');
       if (firstNode) {

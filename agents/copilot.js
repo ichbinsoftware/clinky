@@ -11,13 +11,31 @@ export const copilot = {
     const systemPrompt = SYSTEM_PROMPT;
     // No --append-system-prompt flag; fold system prompt into the user prompt.
     const fullPrompt = `${systemPrompt}\n\n--- USER PROMPT ---\n${prompt}`;
-    // Copilot only supports low/medium/high; clamp anything higher.
-    const copilotEffort = (effort === 'xhigh' || effort === 'max') ? 'high' : effort;
-    const args = ['-p', fullPrompt, '--output-format', 'json', '--allow-all-tools', '--effort', copilotEffort];
+    // Copilot tops out at xhigh; clamp max down.
+    const copilotEffort = effort === 'max' ? 'xhigh' : effort;
+    const args = [
+      '-p', fullPrompt, '--output-format', 'json',
+      // shell is the only tool the session needs: --available-tools strips the
+      // rest from what the model sees; --allow-all-tools is still required for
+      // non-interactive mode and auto-approves it. (Permission-layer name is
+      // "shell"; the runtime event toolName is "bash".)
+      '--available-tools=shell',
+      '--allow-all-tools',
+      // Isolation: skip AGENTS.md pickup, built-in MCP schemas, the ask_user
+      // tool (which would stall a -p session), and the launch update check.
+      '--no-custom-instructions',
+      '--disable-builtin-mcps',
+      '--no-ask-user',
+      '--no-auto-update',
+      '--effort', copilotEffort,
+    ];
     if (model) args.push('--model', model);
     return { cmd: 'copilot', args };
   },
 
+  // Per-session usage state. runWithProvider invokes parseLine on an
+  // Object.create(provider) wrapper, so writes to `this._*` shadow these
+  // prototype defaults per run instead of leaking across concurrent sessions.
   _outputTokens: 0,
   _model: null,
   _numTurns: 0,

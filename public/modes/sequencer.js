@@ -1,5 +1,5 @@
 import { Mode } from '/mode.js';
-import { showTooltip, hideTooltip, hexToRgb, incomingRefsOf, onGraphComplete, relGlyph } from '/clinky.js';
+import { showTooltip, hideTooltip, hexToRgb, incomingRefsOf, onGraphComplete, relGlyph, relColor, nodeBy } from '/clinky.js';
 import { playSynth, setAesthetic, pickSessionKey } from '/synth.js';
 
 const STEPS = 16;
@@ -321,10 +321,47 @@ class SequencerMode extends Mode {
       this.ctx.fillRect(x, y, cellW, cellH); fc.alpha *= 0.9;
     });
     this.flashCells = this.flashCells.filter(f => f.alpha > 0.01);
+    this.drawRefsArcs(cellW, cellH, padTop);
     this.ctx.strokeStyle = '#ff006e'; this.ctx.globalAlpha = 0.6; this.ctx.lineWidth = 2;
     const px = LEFT_GUTTER + (this.playhead + 0.5) * cellW;
     this.ctx.beginPath(); this.ctx.moveTo(px, padTop); this.ctx.lineTo(px, padTop + this.grid.length * cellH); this.ctx.stroke();
     this.ctx.globalAlpha = 1; this.ctx.textAlign = 'start';
+  }
+
+  drawRefsArcs(cellW, cellH, padTop) {
+    const pos = new Map();
+    for (let ri = 0; ri < this.grid.length; ri++) {
+      for (let ci = 0; ci < STEPS; ci++) {
+        const cell = this.grid[ri][ci]; if (!cell || cell.id == null) continue;
+        pos.set(cell.id, { x: LEFT_GUTTER + (ci + 0.5) * cellW, y: padTop + (ri + 0.5) * cellH });
+      }
+    }
+    if (pos.size === 0) return;
+    this.ctx.lineCap = 'round';
+    for (let ri = 0; ri < this.grid.length; ri++) {
+      for (let ci = 0; ci < STEPS; ci++) {
+        const src = this.grid[ri][ci]; if (!src || !Array.isArray(src.refs) || src.refs.length === 0) continue;
+        const sp = pos.get(src.id); if (!sp) continue;
+        for (const refId of src.refs) {
+          const tp = pos.get(refId); if (!tp) continue;
+          const [r, g, b] = hexToRgb(relColor(src.rel));
+          let dash = [], width = 1.0, alpha = 0.45;
+          switch (src.rel) {
+            case 'synthesizes': width = 1.6; break;
+            case 'contradicts': dash = [4, 3]; break;
+            case 'refines': dash = [1, 3]; width = 0.8; alpha = 0.35; break;
+            case 'questions': dash = [2, 3]; alpha = 0.35; break;
+            case 'supersedes': dash = [3, 4]; alpha = 0.30; break;
+          }
+          this.ctx.strokeStyle = `rgba(${r},${g},${b},${alpha})`; this.ctx.lineWidth = width;
+          if (dash.length) this.ctx.setLineDash(dash);
+          const mx = (sp.x + tp.x) / 2, my = Math.min(sp.y, tp.y) - cellH * 0.4;
+          this.ctx.beginPath(); this.ctx.moveTo(sp.x, sp.y); this.ctx.quadraticCurveTo(mx, my, tp.x, tp.y); this.ctx.stroke();
+          if (dash.length) this.ctx.setLineDash([]);
+        }
+      }
+    }
+    this.ctx.lineCap = 'butt'; this.ctx.globalAlpha = 1;
   }
 }
 

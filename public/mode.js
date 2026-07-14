@@ -32,6 +32,8 @@ export class Mode {
     this._topicFallbackColor = topicFallbackColor;
     this._auralReady         = false;
 
+    // Expose mode CSS vars on body so chrome elements (legend, counter) can
+    // inherit the correct text/background colours for this mode's palette.
     Object.entries(vars).forEach(([k, v]) => document.body.style.setProperty(k, v));
 
     // canvas

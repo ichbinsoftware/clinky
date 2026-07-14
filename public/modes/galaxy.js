@@ -500,7 +500,9 @@ class GalaxyMode extends Mode {
       else if (stance === 'exploring') { haloColor = 'rgba(190, 210, 255, 0.22)'; haloScale = 4.2; }
       else if (stance === 'conceding') { haloColor = 'rgba(180, 200, 240, 0.22)'; coreColor = 'rgba(220, 235, 255, 1)'; }
       const tw = Math.max(0, (1 - twAmp) + Math.sin(this.stellarT * twRate + s.twinkle) * twAmp);
-      const size = s.size * tw * heatMult;
+      const incoming = s.node && s.node.id != null ? (this.incomingRefsMap[s.node.id] || 0) : 0;
+      const pivotMult = incoming >= 3 ? 1 + Math.min(incoming - 2, 5) * 0.2 : 1;
+      const size = s.size * tw * heatMult * pivotMult;
       this.ctx.fillStyle = haloColor || s.color; this.ctx.globalAlpha = haloAlpha * dim;
       this.ctx.beginPath(); this.ctx.arc(x, y, size * haloScale, 0, Math.PI * 2); this.ctx.fill();
       this.ctx.globalAlpha = dim; this.ctx.fillStyle = coreColor || s.color;
