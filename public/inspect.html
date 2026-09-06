@@ -112,8 +112,14 @@
   .status { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: #888; margin-bottom: 0.6rem; }
   .status.streaming { color: var(--red); }
   .status.done { color: var(--supports); }
+  .status.error { color: var(--red); font-weight: 700; }
 
   .empty { font-family: var(--mono); font-size: 0.8rem; color: #999; text-align: center; padding: 3rem 0; }
+  .error-card { background: #fff5f5; border: 1.5px solid var(--red); border-left-width: 6px; padding: 0.9rem 1rem; margin: 0.5rem 0 1rem; }
+  .error-card .error-title { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--red); font-weight: 700; margin-bottom: 0.35rem; }
+  .error-card .error-msg { font-family: var(--mono); font-size: 0.8rem; line-height: 1.5; color: var(--ink); white-space: pre-wrap; word-break: break-word; }
+  .error-card .error-hint { font-family: var(--sans); font-size: 0.85rem; line-height: 1.5; color: #555; margin-top: 0.6rem; }
+  .error-card .error-hint code { font-family: var(--mono); font-size: 0.75rem; background: #f0ece0; padding: 1px 4px; }
   ::selection { background: var(--yellow); }
 
   /* raw-JSON panel at the bottom of the page */
@@ -141,14 +147,20 @@
   <button id="clear">clear ↺</button>
   <span class="session-opts">
     <label>agent</label>
-    <select id="agent" title="Backend agent. claude = default; copilot = GitHub Copilot CLI (must be installed); codex = OpenAI Codex CLI (must be installed).">
+    <select id="agent" title="Backend agent. claude = default; copilot = GitHub Copilot CLI (must be installed); codex = OpenAI Codex CLI (must be installed); antigravity = Google Antigravity CLI 'agy' (must be installed); cursor = Cursor CLI 'cursor-agent' (must be installed); qwen = Qwen Code CLI (must be installed).">
       <option value="claude" selected>claude</option>
       <option value="copilot">copilot</option>
       <option value="codex">codex</option>
+      <option value="antigravity">antigravity</option>
+      <option value="cursor">cursor</option>
+      <option value="qwen">qwen</option>
     </select>
     <label>model</label>
     <select id="model" title="Pinned model version. Aliases like 'sonnet' would auto-resolve to latest, which breaks benchmark reproducibility.">
-      <option value="claude-sonnet-4-6" selected>sonnet 4.6</option>
+      <option value="claude-sonnet-5" selected>sonnet 5</option>
+      <option value="claude-fable-5">fable 5</option>
+      <option value="claude-opus-4-8">opus 4.8</option>
+      <option value="claude-sonnet-4-6">sonnet 4.6</option>
       <option value="claude-opus-4-7">opus 4.7</option>
       <option value="claude-opus-4-6">opus 4.6 (fast)</option>
       <option value="claude-haiku-4-5-20251001">haiku 4.5</option>
@@ -157,7 +169,7 @@
       #model:disabled { opacity: 0.45; cursor: default; }
     </style>
     <label>effort</label>
-    <select id="effort" title="Reasoning effort level. Higher = more deliberation. Default high — medium stutters on procedural prompts. Copilot only supports low/medium/high; xhigh and max clamp to high.">
+    <select id="effort" title="Reasoning effort level. Higher = more deliberation. Default high — medium stutters on procedural prompts. Options adapt per backend: copilot/codex clamp max to xhigh; cursor/antigravity encode effort in the model; qwen has none.">
       <option value="low">low</option>
       <option value="medium">medium</option>
       <option value="high" selected>high</option>
@@ -212,6 +224,13 @@
       <div class="r-within" id="b-rwithin" style="width:0%"></div>
     </div>
     <div class="legend"><span><span class="swatch" style="background:var(--supports)"></span>cross-batch</span><span><span class="swatch" style="background:var(--refines)"></span>within-batch</span></div>
+
+    <div class="row" title="Of all refs, what fraction point at the immediately preceding node (id − 1). Healthy sessions run ~0.4–0.6; 0.75+ means the graph is a chain wearing edges — coverage looks fine but topology is degenerate.">
+      <span>chain ratio</span><span class="v" id="s-chain">—</span>
+    </div>
+    <div class="row" title="Nodes with 3+ incoming refs — the ideas the reasoning keeps returning to. Zero pivots at 20 nodes is the chain warning from the other direction.">
+      <span>pivots</span><span class="v" id="s-pivots">—</span>
+    </div>
 
     <div class="row" title="Mean heat across populated nodes. Higher = the model flagged more moments as consequential.">
       <span>heat mean</span><span class="v" id="s-hmean">—</span>
@@ -440,6 +459,26 @@ function updateStats() {
   $('b-rcross').style.width  = rCrossPct  + '%';
   $('b-rwithin').style.width = rWithinPct + '%';
 
+  // topology: chain ratio + pivots. Coverage counts whether edges exist; these
+  // two measure where they go. A run can score 95% refs while every ref points
+  // at id − 1 — a numbered list wearing edges (Gemini Pro does exactly this).
+  let rChain = 0;
+  const incoming = {};
+  for (const node of state.nodes) {
+    if (!node.refs) continue;
+    for (const refId of node.refs) {
+      if (!nodeById[refId]) continue;
+      if (refId === node.id - 1) rChain++;
+      incoming[refId] = (incoming[refId] || 0) + 1;
+    }
+  }
+  const chainRatio = rTot ? rChain / rTot : null;
+  const chainEl = $('s-chain');
+  chainEl.textContent = chainRatio != null ? chainRatio.toFixed(2) : '—';
+  chainEl.style.color = (chainRatio != null && chainRatio >= 0.75 && n >= 8) ? 'var(--red)' : '';
+  const pivots = Object.values(incoming).filter(k => k >= 3).length;
+  $('s-pivots').textContent = rTot ? pivots : '—';
+
   // heat: mean + which types carry it. If only `claim` ever has heat, the
   // model is using heat as a confidence proxy, not as a surprise signal.
   const heated = state.nodes.filter(x => x.heat != null);
@@ -455,6 +494,30 @@ function setStatus(s, cls) {
   statusEl.className = 'status ' + (cls || '');
 }
 
+// Render the failure where the nodes would have been, with a next step.
+// The server's message is shown verbatim; the hint is keyed off known shapes.
+function showErrorCard(msg, code) {
+  const agent = $('agent').value;
+  let hint = '';
+  if (code === 'ENOENT' || /not installed|not found|ENOENT/i.test(msg)) {
+    hint = `Install the ${agent} CLI and make sure it is on PATH for the shell that started <code>node server.js</code>, then press think again. See README › Requirements.`;
+  } else if (/no thoughts parsed/i.test(msg)) {
+    hint = 'The CLI ran but emitted no thought JSON. Usually an auth or model problem — the CLI\'s own stderr is quoted above. Try the same prompt in the CLI directly.';
+  } else if (/connection lost/i.test(msg)) {
+    hint = 'The SSE stream dropped. Check the terminal running <code>node server.js</code>.';
+  } else if (/model|not a valid|unknown model|invalid/i.test(msg)) {
+    hint = 'The model id was rejected by the CLI. Pick another from the model dropdown, or check the backend\'s model list.';
+  }
+  const card = document.createElement('div');
+  card.className = 'error-card';
+  const title = document.createElement('div'); title.className = 'error-title'; title.textContent = `${agent} failed`;
+  const body = document.createElement('div'); body.className = 'error-msg'; body.textContent = msg;
+  card.append(title, body);
+  if (hint) { const h = document.createElement('div'); h.className = 'error-hint'; h.innerHTML = hint; card.append(h); }
+  const empty = streamEl.querySelector('.empty');
+  if (empty) empty.replaceWith(card); else streamEl.prepend(card);
+}
+
 function startElapsed() {
   state.startMs = performance.now();
   clearInterval(state.elapsedTimer);
@@ -468,6 +531,7 @@ function clearStream() {
   state.nodes = [];
   state.topics = [];
   state.lastBatchId = 0;
+  state.error = null;
   streamEl.innerHTML = '<div class="empty">no nodes yet — press think</div>';
   updateStats();
   $('s-elapsed').textContent = '0s';
@@ -492,8 +556,11 @@ function startThink() {
   // use mode=inspect so server assigns a palette (falls back to default if unknown)
   const record  = $('record').checked  ? '1' : '0';
   const model = $('model').value;
-  const effort = $('effort').value;
   const agent = $('agent').value;
+  // Requested effort goes on the URL only when the backend has a flag for it;
+  // the recorded/displayed effort is what the run actually gets.
+  const effortRequested = $('effort').disabled ? '' : $('effort').value;
+  const effort = effectiveEffort(agent, model, effortRequested);
   state.sessionConfig = { agent, model, effort, narrate: true, record: record === '1' };
   rawStream.prompt = prompt;
   rawStream.session = { agent, model, effort, narrate: true };
@@ -509,7 +576,8 @@ function startThink() {
     esUrl = `/api/replay/${encodeURIComponent(sid)}${speed != null ? `?speed=${encodeURIComponent(speed)}` : ''}`;
     rawStream.session = { ...(rawStream.session || {}), replay: sid };
   } else {
-    esUrl = `/api/think?prompt=${encodeURIComponent(prompt)}&mode=inspect&narrate=1&record=${record}&model=${encodeURIComponent(model)}&effort=${encodeURIComponent(effort)}&agent=${encodeURIComponent(agent)}`;
+    esUrl = `/api/think?prompt=${encodeURIComponent(prompt)}&mode=inspect&narrate=1&record=${record}&model=${encodeURIComponent(model)}&agent=${encodeURIComponent(agent)}`
+          + (effortRequested ? `&effort=${encodeURIComponent(effortRequested)}` : '');
   }
   state.es = new EventSource(esUrl);
 
@@ -605,8 +673,14 @@ function startThink() {
     renderRaw();
   });
   state.es.addEventListener('done', () => {
-    setStatus(`done · ${state.nodes.length} nodes · ${((performance.now() - state.startMs)/1000).toFixed(1)}s`, 'done');
-    rawStream.status = 'done';
+    // The server sends `error` and then `done`; an error must not be
+    // overwritten by a cheerful "done · 0 nodes".
+    if (state.error) {
+      setStatus(`error · ${state.nodes.length} nodes · ${state.error}`, 'error');
+    } else {
+      setStatus(`done · ${state.nodes.length} nodes · ${((performance.now() - state.startMs)/1000).toFixed(1)}s`, 'done');
+      rawStream.status = 'done';
+    }
     $('go').style.display = '';
     $('stop').style.display = 'none';
     stopElapsed();
@@ -614,17 +688,18 @@ function startThink() {
     renderRaw();
   });
   state.es.addEventListener('error', e => {
-    if (e.data) {
-      try {
-        const err = JSON.parse(e.data);
-        setStatus('error: ' + (err.error || 'unknown'));
-        rawStream.status = 'error';
-        rawStream.error = err;
-      } catch {
-        setStatus('error');
-        rawStream.status = 'error';
-      }
-    }
+    let err = null;
+    if (e.data) { try { err = JSON.parse(e.data); } catch { err = { error: String(e.data) }; } }
+    // No e.data means a transport failure (server gone, connection dropped)
+    // rather than a message from the server.
+    if (!err && state.es.readyState === EventSource.CLOSED) err = { error: 'connection lost — is the server still running?' };
+    if (!err) return;  // transient reconnect; EventSource retries on its own
+    const msg = err.error || 'unknown error';
+    state.error = msg;
+    setStatus('error · ' + msg, 'error');
+    rawStream.status = 'error';
+    rawStream.error = err;
+    showErrorCard(msg, err.code);
     $('go').style.display = '';
     $('stop').style.display = 'none';
     stopElapsed();
@@ -667,24 +742,83 @@ renderRaw();
 
 // Sync model dropdown to selected agent
 const MODEL_OPTIONS = {
+  // Refreshed 2026-08-29. First entry = default. Sources: claude — Anthropic model
+  // table; codex — learn.chatgpt.com/docs/models; copilot — docs.github.com supported
+  // models (slugs follow copilot's dotted convention, unverified on this machine);
+  // antigravity — antigravity.google/docs/models (display names; 3.6/3.7 Flash
+  // unverified on this machine); cursor — `cursor-agent --list-models`; qwen —
+  // ~/.qwen/settings.json modelProviders.
   claude: [
-    { value: 'claude-sonnet-4-6',         label: 'sonnet 4.6' },
+    { value: 'claude-sonnet-5',           label: 'sonnet 5' },
+    { value: 'claude-opus-5',             label: 'opus 5' },
+    { value: 'claude-fable-5',            label: 'fable 5' },
+    { value: 'claude-opus-4-8',           label: 'opus 4.8' },
     { value: 'claude-opus-4-7',           label: 'opus 4.7' },
     { value: 'claude-opus-4-6',           label: 'opus 4.6' },
+    { value: 'claude-sonnet-4-6',         label: 'sonnet 4.6' },
     { value: 'claude-haiku-4-5-20251001', label: 'haiku 4.5' },
   ],
   codex: [
-    { value: 'gpt-5.4',       label: 'gpt-5.4' },
-    { value: 'gpt-5.5',       label: 'gpt-5.5' },
-    { value: 'gpt-5.4-mini',  label: 'gpt-5.4-mini' },
-    { value: 'gpt-5.3-codex', label: 'gpt-5.3-codex' },
+    { value: 'gpt-5.6-sol',         label: 'gpt-5.6-sol (vendor default)' },
+    { value: 'gpt-5.6-terra',       label: 'gpt-5.6-terra' },
+    { value: 'gpt-5.6-luna',        label: 'gpt-5.6-luna' },
+    { value: 'gpt-5.5',             label: 'gpt-5.5' },
+    { value: 'gpt-5.3-codex-spark', label: 'gpt-5.3-codex-spark' },
+    { value: 'gpt-5.3-codex',       label: 'gpt-5.3-codex' },
   ],
   copilot: [
+    { value: 'claude-sonnet-5',   label: 'claude sonnet 5' },
+    { value: 'claude-opus-5',     label: 'claude opus 5' },
+    { value: 'claude-opus-4.8',   label: 'claude opus 4.8' },
     { value: 'claude-sonnet-4.6', label: 'claude sonnet 4.6' },
-    { value: 'claude-opus-4.7',   label: 'claude opus 4.7' },
-    { value: 'claude-opus-4.6',   label: 'claude opus 4.6' },
+    { value: 'claude-haiku-4.5',  label: 'claude haiku 4.5' },
+    { value: 'gpt-5.6-terra',     label: 'gpt-5.6 terra' },
+    { value: 'gpt-5.6-sol',       label: 'gpt-5.6 sol' },
+    { value: 'gpt-5.6-luna',      label: 'gpt-5.6 luna' },
     { value: 'gpt-5.5',           label: 'gpt-5.5' },
-    { value: 'gpt-5.4',           label: 'gpt-5.4' },
+    { value: 'gpt-5.3-codex',     label: 'gpt-5.3 codex' },
+    { value: 'gemini-3.7-flash',  label: 'gemini 3.7 flash' },
+    { value: 'gemini-3.6-flash',  label: 'gemini 3.6 flash' },
+    { value: 'kimi-k3',           label: 'kimi k3' },
+  ],
+  antigravity: [
+    { value: 'Gemini 3.1 Pro (High)',         label: 'gemini 3.1 pro (high)' },
+    { value: 'Gemini 3.7 Flash (High)',       label: 'gemini 3.7 flash (high)' },
+    { value: 'Gemini 3.7 Flash (Low)',        label: 'gemini 3.7 flash (low)' },
+    { value: 'Gemini 3.6 Flash (High)',       label: 'gemini 3.6 flash (high)' },
+    { value: 'Gemini 3.5 Flash (High)',       label: 'gemini 3.5 flash (high)' },
+    { value: 'Gemini 3.5 Flash (Low)',        label: 'gemini 3.5 flash (low)' },
+    { value: 'Gemini 3.1 Pro (Low)',          label: 'gemini 3.1 pro (low)' },
+    { value: 'Claude Sonnet 4.6 (Thinking)',  label: 'claude sonnet 4.6 (thinking)' },
+    { value: 'Claude Opus 4.6 (Thinking)',    label: 'claude opus 4.6 (thinking)' },
+    { value: 'GPT-OSS 120B (Medium)',         label: 'gpt-oss 120b (medium)' },
+  ],
+  cursor: [
+    { value: 'composer-2.5',                  label: 'composer 2.5' },
+    { value: 'auto',                          label: 'auto' },
+    { value: 'claude-sonnet-5-thinking-high', label: 'claude sonnet 5 thinking (high)' },
+    { value: 'claude-opus-5-thinking-high',   label: 'claude opus 5 thinking (high)' },
+    { value: 'claude-fable-5-thinking-high',  label: 'claude fable 5 thinking (high)' },
+    { value: 'cursor-grok-4.6-high',          label: 'cursor grok 4.6 (high)' },
+    { value: 'gpt-5.6-sol-high',              label: 'gpt-5.6 sol (high)' },
+    { value: 'gpt-5.6-terra-high',            label: 'gpt-5.6 terra (high)' },
+    { value: 'gpt-5.5-high',                  label: 'gpt-5.5 (high)' },
+    { value: 'gpt-5.3-codex-high',            label: 'gpt-5.3 codex (high)' },
+    { value: 'gemini-3.7-flash-high',         label: 'gemini 3.7 flash (high)' },
+    { value: 'kimi-k3-high',                  label: 'kimi k3 (high)' },
+    { value: 'glm-5.2-high',                  label: 'glm 5.2 (high)' },
+  ],
+  qwen: [
+    { value: 'qwen3.8-flash',     label: 'qwen 3.8 flash' },
+    { value: 'qwen3.8-max',       label: 'qwen 3.8 max' },
+    { value: 'qwen3.7-plus',      label: 'qwen 3.7 plus' },
+    { value: 'qwen3.7-max',       label: 'qwen 3.7 max' },
+    { value: 'qwen3.6-plus',      label: 'qwen 3.6 plus' },
+    { value: 'glm-5.2',           label: 'glm 5.2' },
+    { value: 'glm-5.1',           label: 'glm 5.1' },
+    { value: 'kimi-k3',           label: 'kimi k3' },
+    { value: 'deepseek-v4-pro',   label: 'deepseek v4 pro' },
+    { value: 'deepseek-v4-flash', label: 'deepseek v4 flash' },
   ],
 };
 
@@ -698,8 +832,57 @@ function syncModelDropdown() {
   modelEl.disabled = opts.length === 1 && opts[0].value === '';
 }
 
-$('agent').addEventListener('change', syncModelDropdown);
+// Effort semantics differ per backend (agents/*.js): claude honours all five
+// levels; copilot and codex clamp max → xhigh; cursor and antigravity encode
+// effort in the model id / display name and ignore the flag; qwen has no
+// effort at all. The dropdown reflects that instead of pretending.
+const EFFORT_OPTIONS = {
+  claude:      { opts: ['low', 'medium', 'high', 'xhigh', 'max'], def: 'high' },
+  copilot:     { opts: ['low', 'medium', 'high', 'xhigh'], def: 'high', note: 'max clamps to xhigh' },
+  codex:       { opts: ['low', 'medium', 'high', 'xhigh'], def: 'high', note: 'max clamps to xhigh' },
+  cursor:      { fixed: 'in model id' },
+  antigravity: { fixed: 'in model name' },
+  qwen:        { fixed: 'no effort flag' },
+};
+
+// The effort a run actually gets, for the usage panel and session metadata —
+// derived from the model string where the backend encodes it there.
+function effectiveEffort(agent, model, requested) {
+  if (agent === 'cursor') {
+    const m = /-(low|medium|high|xhigh|extra-high|max|minimal|none)(?:-fast)?$/.exec(model || '');
+    return m ? m[1] : (model === 'auto' || !model ? 'auto' : 'default');
+  }
+  if (agent === 'antigravity') {
+    const m = /\((Low|Medium|High|Thinking)\)/.exec(model || '');
+    return m ? m[1].toLowerCase() : 'default';
+  }
+  if (agent === 'qwen') return 'n/a';
+  if ((agent === 'copilot' || agent === 'codex') && requested === 'max') return 'xhigh';
+  return requested || 'high';
+}
+
+function syncEffortDropdown() {
+  const agent = $('agent').value;
+  const effortEl = $('effort');
+  const spec = EFFORT_OPTIONS[agent] || EFFORT_OPTIONS.claude;
+  if (spec.fixed) {
+    const eff = effectiveEffort(agent, $('model').value, null);
+    effortEl.innerHTML = `<option value="" selected>${eff} (${spec.fixed})</option>`;
+    effortEl.disabled = true;
+    effortEl.title = `${agent} ignores the effort flag — ${spec.fixed}. Pick the model variant instead.`;
+    return;
+  }
+  const prev = effortEl.disabled ? null : effortEl.value;
+  const chosen = spec.opts.includes(prev) ? prev : spec.def;
+  effortEl.innerHTML = spec.opts.map(o => `<option value="${o}"${o === chosen ? ' selected' : ''}>${o}</option>`).join('');
+  effortEl.disabled = false;
+  effortEl.title = `Reasoning effort for ${agent}. Default high — medium stutters on procedural prompts.${spec.note ? ' ' + spec.note + '.' : ''}`;
+}
+
+$('agent').addEventListener('change', () => { syncModelDropdown(); syncEffortDropdown(); });
+$('model').addEventListener('change', syncEffortDropdown);
 syncModelDropdown();
+syncEffortDropdown();
 
 // Replay auto-fire: if the page was opened with ?session=<id>, fetch the
 // saved prompt to populate the input, then trigger startThink. The session
@@ -713,10 +896,24 @@ syncModelDropdown();
       const s = list.find(x => x.id === sid);
       if (s) {
         if (s.prompt) $('prompt').value = s.prompt;
-        if (s.model)  $('model').value  = s.model;
-        if (s.effort) $('effort').value = s.effort;
+        // Agent first: the model list depends on it, and assigning .value
+        // fires no change event, so repopulate explicitly before setting
+        // the model. A recorded model absent from the list is added so the
+        // dropdown shows what the session actually ran.
         if (s.agent)  $('agent').value  = s.agent;
-        $('narrate').checked = !!s.narrate;
+        syncModelDropdown();
+        if (s.model) {
+          const modelEl = $('model');
+          if (![...modelEl.options].some(o => o.value === s.model)) {
+            modelEl.add(new Option(s.model, s.model));
+          }
+          modelEl.value = s.model;
+        }
+        syncEffortDropdown();
+        if (s.effort && !$('effort').disabled && [...$('effort').options].some(o => o.value === s.effort)) {
+          $('effort').value = s.effort;
+        }
+        // (no narrate control exists — narration is always on, rule 10)
       }
     })
     .catch(() => {})

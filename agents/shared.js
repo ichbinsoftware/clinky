@@ -8,12 +8,15 @@ import url from 'node:url';
 import crypto from 'node:crypto';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
-export const SESSIONS_DIR = path.join(__dirname, '..', 'sessions');
+// bin/clinky.js points this at ~/.clinky/sessions so a global install records
+// into the user's home rather than inside node_modules; running from source
+// falls back to the repo's own sessions/ dir.
+export const SESSIONS_DIR = process.env.CLINKY_SESSIONS_DIR || path.join(__dirname, '..', 'sessions');
 
-// Empty scratch dir the agent CLIs spawn in. All three CLIs auto-load project
-// docs (CLAUDE.md / AGENTS.md) from their cwd — spawning from flow/ would feed
-// clinky's own architecture docs into every thinking session, costing tokens
-// and invalidating the prompt cache whenever the docs change.
+// Empty scratch dir the agent CLIs spawn in. Every one of these CLIs auto-loads
+// project docs (CLAUDE.md / AGENTS.md) from its cwd — spawning from the install
+// dir would feed clinky's own architecture docs into every thinking session,
+// costing tokens and invalidating the prompt cache whenever the docs change.
 let SCRATCH_DIR = null;
 try {
   SCRATCH_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'clinky-'));
@@ -41,7 +44,7 @@ Stance values: "exploring" | "claiming" | "questioning" | "conceding"
 Types (use EXACTLY one of these six — do not invent new types): claim, branch, choice, dead-end, aside, resolution. If you want to raise an open question, use type: aside with stance: questioning. If you want to flag a contradiction, use type: dead-end.
 
 HARD RULES (follow exactly):
-1. refs implies rel. If refs is non-empty, rel MUST be set. Never emit refs without rel.
+1. refs and rel travel together. If refs is non-empty, rel MUST be set. Never set rel without refs — if a thought relates to a prior one, name the id in refs; if it truly relates to nothing, omit both.
 2. Every claim, choice, and resolution MUST have because (either ids of supporting thoughts, or ["external"] if drawn from general knowledge, or ["prior"] if it builds on the previous thought generally).
 3. Every dead-end MUST have refs (to the claim or branch it abandons) and rel: "contradicts".
 4. Every resolution MUST have refs to the major prior thoughts it merges, and rel: "synthesizes".
@@ -50,6 +53,7 @@ HARD RULES (follow exactly):
 7. Topic count: 4-8 total, no more. Reuse topics by default. Only create a new topic when the thought is a genuinely distinct conceptual area. Do not let topics proliferate.
 8. Vary confidence by type: asides 0.3-0.6, branches 0.5-0.7, claims 0.6-0.9, resolutions 0.8-0.95.
 9. Stance is always set. Claims use "claiming", branches use "exploring", questions/asides often use "questioning" or "conceding".
+10. Narration between Bash calls is mandatory. After every Bash call except the last, emit 1-2 sentences of plain assistant text before the next Bash call: what you just wrapped, what's next, and why. A batch transition with no narration between it is a schema violation — there are no exceptions.
 
 Example Bash call (3 thoughts, fully enriched):
 echo '{"topic":"goals","type":"claim","text":"start by defining what success looks like","confidence":0.85,"stance":"claiming","because":["external"]}'
@@ -62,7 +66,7 @@ echo '{"topic":"audience","type":"claim","text":"define audience before channels
 Procedural:
 - Aim for 6-8 Bash calls total (20-25 thoughts).
 - Start immediately. Do not plan everything first.
-- Between Bash calls (ONLY after the first one), emit a brief 1-2 sentence narration as plain assistant text: what you just wrapped, what's next, and why. Keep it tight — one or two sentences, no headings, no lists.
+- Narrate between Bash calls per rule 10. Keep it tight — one or two sentences, no headings, no lists.
 - Before the FIRST Bash call, and inside Bash echo commands, NEVER output plain text. Thoughts live inside echo; narration lives between tool calls.
 - After the resolution node, emit ONLY the reflection. No other nodes. The resolution closes the reasoning graph.
 
@@ -171,14 +175,25 @@ class Recorder {
       if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
       const stamp = new Date().toISOString().replace(/[:.]/g, '-').replace('Z', '');
       const hash  = crypto.createHash('sha1').update(meta.prompt).digest('hex').slice(0, 6);
-      this.id    = `${stamp}_${hash}`;
-      this.path  = path.join(SESSIONS_DIR, `${this.id}.jsonl`);
-      this.fd    = fs.openSync(this.path, 'w');
+      // Stamp + prompt hash alone collide when two requests for the same
+      // prompt land in the same millisecond; a random suffix makes the id
+      // unique per process, and 'wx' refuses to clobber a file if it ever
+      // does collide (the recorder then disables itself, non-fatally).
+      const nonce = crypto.randomBytes(2).toString('hex');
+      const id    = `${stamp}_${hash}${nonce}`;
+      const fp    = path.join(SESSIONS_DIR, `${id}.jsonl`);
+      // Open before publishing the id — a recorder that failed to open must
+      // not report `saved <id>` for a file that does not exist.
+      this.fd    = fs.openSync(fp, 'wx');
+      this.id    = id;
+      this.path  = fp;
       this.start = Date.now();
       this._writeLine('meta', { ...meta, id: this.id, started_at: new Date().toISOString() });
     } catch (err) {
       process.stderr.write(`[clinky/recorder] disabled: ${err.message}\n`);
       this.fd = null;
+      this.id = null;
+      this.path = null;
     }
   }
   _writeLine(event, data) {
@@ -209,9 +224,12 @@ class Recorder {
 
 // Provider interface — each agent module exports an object with:
 //   name:      string                                    — used in logs and error messages
+//   noEffort?: boolean                                   — true if the CLI takes no effort flag
+//                                                          (depth encoded in the model id/name);
+//                                                          the server then records effort as null
 //   logStart:  (model, effort) => string                — startup log label
-//   spawn:     (prompt, narrate, model, effort) =>      — returns { cmd, args }
-//              { cmd: string, args: string[] }
+//   spawn:     (prompt, model, effort) =>               — returns { cmd, args, env? }
+//              { cmd: string, args: string[], env?: object }   env merges over process.env
 //   parseLine: (line: string) => action[]               — maps one stdout line to zero or more actions:
 //     { type: 'batch',          nodesText: string|null }  — new batch; extract nodes if nodesText present
 //     { type: 'nodes',          text: string }            — extract nodes from text (delayed, e.g. codex)
@@ -236,13 +254,15 @@ export function runWithProvider(provider, req, res, prompt, mode, model, effort,
   // across concurrent sessions.
   const parser = Object.create(provider);
 
-  let child;
+  let child, cmd = provider.name;
   try {
-    const { cmd, args } = provider.spawn(prompt, model, effort);
+    const spec = provider.spawn(prompt, model, effort);
+    cmd = spec.cmd;   // hoisted: the 'error' handler below names it in its message
+    const { args, env: providerEnv } = spec;
     child = spawn(cmd, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       ...(SCRATCH_DIR ? { cwd: SCRATCH_DIR } : {}),
-      env: { ...process.env, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' },
+      env: { ...process.env, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1', ...(providerEnv || {}) },
     });
   } catch {
     res.write(`event: error\ndata: ${JSON.stringify({ error: `${provider.name} not found` })}\n\n`);
@@ -260,7 +280,9 @@ export function runWithProvider(provider, req, res, prompt, mode, model, effort,
 
   const startTime = Date.now();
   let emittedCount = 0;
-  const COLORS = MODE_PALETTES[mode] || DEFAULT_COLORS;
+  // Own-property lookup: `mode` is request-supplied, and a bare index would
+  // resolve Object.prototype members ("constructor") as a palette.
+  const COLORS = (Object.hasOwn(MODE_PALETTES, mode) && MODE_PALETTES[mode]) || DEFAULT_COLORS;
   const seenTopics = [];
 
   let batchId = 0;
@@ -390,8 +412,13 @@ export function runWithProvider(provider, req, res, prompt, mode, model, effort,
   });
 
   child.on('close', () => {
+    // A spawn failure already ended the response from the 'error' handler
+    // (Node emits 'error' then 'close' for ENOENT) — nothing more to say.
+    if (res.writableEnded) { clearInterval(keepalive); recorder.close(); return; }
     if (emittedCount === 0 && !fatalErrorMessage) {
-      const detail = stderrBuf.trim() ? ` — ${stderrBuf.trim().slice(0, 300)}` : '';
+      // Quote the CLI's stderr, minus lines the provider marks as noise.
+      const stderrText = stderrBuf.split('\n').filter(l => l.trim() && !provider.filterStderr?.(l)).join('\n').trim();
+      const detail = stderrText ? ` — ${stderrText.slice(0, 300)}` : '';
       process.stderr.write(`[clinky/${provider.name}] no nodes emitted${detail}\n`);
       res.write(`event: error\ndata: ${JSON.stringify({ error: `no thoughts parsed${detail}` })}\n\n`);
     } else if (!fatalErrorMessage) {
@@ -411,7 +438,16 @@ export function runWithProvider(provider, req, res, prompt, mode, model, effort,
 
   child.on('error', err => {
     clearInterval(keepalive);
-    res.write(`event: error\ndata: ${JSON.stringify({ error: err.message })}\n\n`);
+    // "spawn codex ENOENT" means nothing to someone who just picked a backend
+    // from a dropdown — say what it is and what to do about it.
+    const message = err.code === 'ENOENT'
+      ? `${cmd} is not installed or not on PATH — the ${provider.name} backend needs the ${cmd} CLI (see README › Requirements)`
+      : err.code === 'EACCES'
+        ? `${cmd} exists but is not executable (EACCES) — check its permissions`
+        : `${provider.name}: ${err.message}`;
+    fatalErrorMessage = message;
+    process.stderr.write(`[clinky/${provider.name}] ${message}\n`);
+    res.write(`event: error\ndata: ${JSON.stringify({ error: message, code: err.code || null })}\n\n`);
     res.write(`event: done\ndata: {}\n\n`);
     recorder.close();
     try { res.end(); } catch {}

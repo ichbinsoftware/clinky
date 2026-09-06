@@ -1,7 +1,7 @@
 {
   "name": "@ichbinsoftware/clinky",
-  "version": "1.1.0",
-  "description": "31-mode visualizer for AI thinking — works with claude, codex, and copilot CLIs",
+  "version": "1.2.0",
+  "description": "31-mode visualizer for AI thinking — works with claude, codex, copilot, antigravity, cursor, and qwen CLIs",
   "type": "module",
   "bin": {
     "clinky": "bin/clinky.js"
@@ -24,6 +24,9 @@
     "claude",
     "codex",
     "copilot",
+    "antigravity",
+    "cursor",
+    "qwen",
     "visualization",
     "thinking"
   ],

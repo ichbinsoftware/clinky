@@ -41,11 +41,18 @@ Open **http://localhost:4243** in your browser (substitute your `--port` if you 
 clinky --open                        # also opens the browser for you
 clinky --agent copilot               # use GitHub Copilot CLI
 clinky --agent codex                 # use OpenAI Codex CLI
-clinky --model claude-opus-4-7       # override the default model for the chosen agent
+clinky --agent antigravity           # use Google Antigravity CLI (agy)
+clinky --agent cursor                # use Cursor CLI (cursor-agent)
+clinky --agent qwen                  # use Qwen Code CLI
+clinky --model claude-opus-5         # default model for the default agent only
 clinky --port 4244                   # change port
 clinky --record                      # save every session to ~/.clinky/sessions/
 clinky --verbose                     # log every node arrival to stderr
 ```
+
+`--model` applies only to the agent `--agent` selected. A request that names a
+different backend (`?agent=`) uses that backend's own default instead, so a
+model id is never handed to the CLI it doesn't belong to.
 
 Recorded sessions are listed at `/api/sessions`. Replay any via `/api/replay/<id>` — append `?speed=` (default 4×, 0 = instant) to control playback rate.
 
@@ -58,6 +65,26 @@ Recorded sessions are listed at `/api/sessions`. Replay any via `/api/replay/<id
   - **claude** (default) — `npm i -g @anthropic-ai/claude-code`
   - **copilot** — `npm install -g @github/copilot`
   - **codex** — `npm i -g @openai/codex`
+  - **antigravity** — Google Antigravity CLI (`agy`, from antigravity.google)
+  - **cursor** — Cursor CLI (`curl https://cursor.com/install -fsS | bash`)
+  - **qwen** — Qwen Code CLI (`npm i -g @qwen-code/qwen-code`)
+
+On startup clinky prints which of these are actually on your PATH, so a missing
+CLI shows up before you send a request rather than as a spawn error mid-session.
+
+### Agent notes
+
+**copilot** is opt-in rather than the default for a reason: the CLI has removed flags without deprecation notice before, breaking adapters silently. If a copilot update breaks the integration, switch back to `--agent claude`. Effort `max` clamps to `xhigh`.
+
+**codex** requires the working directory to be inside a trusted git repo (`--skip-git-repo-check` is passed automatically). No effort knob — reasoning depth is set by the model variant.
+
+**claude** is the only backend with prompt-cache control, so the large system prompt stays cacheable across requests — noticeably faster on repeated runs.
+
+**antigravity** (`agy`) runs with `--dangerously-skip-permissions`: headless agy soft-denies unapproved tools, and clinky's echo calls must execute. No effort flag — depth is encoded in the model variant (e.g. `Gemini 3.1 Pro (High)`), and model values are agy's display names verbatim.
+
+**cursor** (`cursor-agent`) runs with `--trust --force`; without `--force` the CLI rejects tool calls even in print mode. No effort flag — depth is encoded in the model id (`cursor-agent --list-models` lists ~200, spanning multiple vendors).
+
+**qwen** needs model ids that exist in your own `~/.qwen/settings.json` `modelProviders` — the `/inspect` list assumes the Model Studio set, and an unknown id fails loudly on stderr. Runs with `--approval-mode yolo` (headless qwen denies the shell tool by default) and `--safe-mode`. Model choice matters more here than on other backends: `qwen3.8-flash` (the default) returns a first node in ~9s, while `qwen3.8-max` has better schema compliance but spends minutes thinking before its first node.
 
 ### A note on capabilities
 

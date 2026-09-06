@@ -1,5 +1,5 @@
 // clinky/server.js — send a prompt, get classified thought nodes via SSE
-// usage: node server.js [--port 4243] [--agent claude|copilot|codex] [--record] [--verbose]
+// usage: node server.js [--port 4243] [--agent claude|copilot|codex|antigravity|cursor|qwen] [--record] [--verbose]
 // env:   ~/.clinky/.env and ./.env are loaded at startup (shell vars take precedence)
 
 import http from 'node:http';
@@ -22,9 +22,12 @@ loadEnv(path.join(os.homedir(), '.clinky', '.env'));
 loadEnv(path.join(process.cwd(), '.env'));
 
 import { runWithProvider, SESSIONS_DIR, MODE_PALETTES, DEFAULT_COLORS } from './agents/shared.js';
-import { claude }   from './agents/claude.js';
-import { copilot }  from './agents/copilot.js';
-import { codex }    from './agents/codex.js';
+import { claude }      from './agents/claude.js';
+import { copilot }     from './agents/copilot.js';
+import { codex }       from './agents/codex.js';
+import { antigravity } from './agents/antigravity.js';
+import { cursor }      from './agents/cursor.js';
+import { qwen }        from './agents/qwen.js';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, 'public');
@@ -36,13 +39,27 @@ const CLI_MODEL  = process.argv.includes('--model') ? process.argv[process.argv.
 const CLI_RECORD   = process.argv.includes('--record');
 const CLI_VERBOSE  = process.argv.includes('--verbose');
 
-// Per-agent model defaults. Claude needs an explicit model; copilot and codex
-// are better left to their own CLI defaults (new models ship regularly).
-const DEFAULT_MODELS = { claude: 'claude-sonnet-4-6', copilot: 'claude-sonnet-4.6', codex: 'gpt-5.4' };
+// Per-agent model defaults (refreshed 2026-08-29). codex follows the vendor
+// default (gpt-5.6-sol; gpt-5.4 / gpt-5.4-mini retire from Codex 2026-08-31).
+// qwen ids must exist in the user's ~/.qwen/settings.json modelProviders — an
+// id the CLI does not know fails loudly on stderr.
+const DEFAULT_MODELS = { claude: 'claude-sonnet-5', copilot: 'claude-sonnet-5', codex: 'gpt-5.6-sol', antigravity: 'Gemini 3.1 Pro (High)', cursor: 'composer-2.5', qwen: 'qwen3.8-flash' };
+
+// Own-property lookups only: these tables are indexed by request-supplied
+// strings, and a bare `obj[key]` would resolve inherited Object.prototype
+// members ("constructor", "__proto__") as truthy values.
+const own = (obj, key) => (Object.hasOwn(obj, key) ? obj[key] : undefined);
 const DEFAULT_EFFORT = 'high';
 const VALID_EFFORTS  = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 
-const providers = { claude, copilot, codex };
+const providers = { claude, copilot, codex, antigravity, cursor, qwen };
+
+// Resolve the server-wide default agent ONCE, through the same own() guard the
+// request path uses. An unknown --agent value (typo, or a backend this build
+// doesn't have) falls back to claude with a startup warning — it must never
+// reach a bare providers[...] index anywhere.
+const CLI_AGENT_UNKNOWN = !!CLI_AGENT && !own(providers, CLI_AGENT);
+const SERVER_AGENT = CLI_AGENT_UNKNOWN || !CLI_AGENT ? 'claude' : CLI_AGENT;
 
 // --- http ---
 
@@ -159,7 +176,7 @@ const server = http.createServer(async (req, res) => {
     const speedRaw = u.searchParams.get('speed');
     const speed = speedRaw == null ? 4 : Number(speedRaw);  // 0 = instant
     const replayMode = u.searchParams.get('mode') || '';
-    const COLORS = MODE_PALETTES[replayMode] || DEFAULT_COLORS;
+    const COLORS = own(MODE_PALETTES, replayMode) || DEFAULT_COLORS;
 
     // Read async — don't block the event loop while loading the session file.
     let raw;
@@ -221,7 +238,12 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/think') {
     const prompt     = u.searchParams.get('prompt') || '';
     const mode       = u.searchParams.get('mode') || '';
-    const agentKey   = u.searchParams.get('agent') || CLI_AGENT || 'claude';
+    // Resolve the agent key ONCE, so model default and provider derive from
+    // the same backend — an unknown key must not pair claude's provider
+    // with another backend's (or a null) model.
+    const requestedAgent = u.searchParams.get('agent') || SERVER_AGENT;
+    const agentKnown = !!own(providers, requestedAgent);
+    const agentKey = agentKnown ? requestedAgent : 'claude';
     // Narrate defaults to on — the batch-transition voice track fills `text_chars` on the
     // Record opt-in: ?record=1 turns it on for this request, ?record=0 forces
     // off even when the server was started with --record. Default follows the
@@ -230,11 +252,22 @@ const server = http.createServer(async (req, res) => {
     const record     = recordParam === '1' ? true : recordParam === '0' ? false : CLI_RECORD;
     const modelParam = u.searchParams.get('model');
     const effortParam = u.searchParams.get('effort');
-    const model  = modelParam?.trim() || CLI_MODEL || DEFAULT_MODELS[agentKey] || null;
-    const effort = VALID_EFFORTS.has(effortParam) ? effortParam : DEFAULT_EFFORT;
+    // --model belongs to the server's default agent only: a codex id handed
+    // to a ?agent=claude request would be a cross-backend model. Other agents
+    // fall through to their own defaults unless the request names a model.
+    const cliModel = agentKey === SERVER_AGENT ? CLI_MODEL : null;
+    // ?model= names a model for the agent the request asked for. When that agent
+    // is unknown we fall back to claude, and the model must not ride along — a
+    // qwen id handed to claude only fails as unrecognized_model.
+    const reqModel = agentKnown ? modelParam?.trim() : null;
+    const model  = reqModel || cliModel || own(DEFAULT_MODELS, agentKey) || null;
     if (!prompt.trim()) { res.writeHead(400); res.end('no prompt'); return; }
 
-    const provider = providers[agentKey] ?? providers.claude;
+    const provider = providers[agentKey];   // agentKey is a known own key by construction
+    // Backends that encode reasoning depth in the model id or name take no
+    // effort flag. Record null rather than the default, so session metadata
+    // never claims an effort the run did not actually have.
+    const effort = provider.noEffort ? null : (VALID_EFFORTS.has(effortParam) ? effortParam : DEFAULT_EFFORT);
 
     res.writeHead(200, {
       'content-type': 'text/event-stream',
@@ -249,10 +282,36 @@ const server = http.createServer(async (req, res) => {
   res.writeHead(404); res.end('not found');
 });
 
+// Which backend CLIs are actually on PATH. Each provider names its binary in
+// spawn(); resolve it the way child_process will, so the console says up
+// front what a "spawn X ENOENT" would otherwise say mid-session.
+function backendBinary(provider) {
+  try { return provider.spawn('', null, 'high').cmd || provider.name; } catch { return provider?.name || ''; }
+}
+function onPath(bin) {
+  if (!bin) return false;
+  if (bin.includes(path.sep)) return fs.existsSync(bin);
+  return (process.env.PATH || '').split(path.delimiter).some(dir => {
+    try { fs.accessSync(path.join(dir, bin), fs.constants.X_OK); return true; } catch { return false; }
+  });
+}
+
 server.listen(PORT, () => {
-  const agent = CLI_AGENT || 'claude';
-  const model = CLI_MODEL || DEFAULT_MODELS[agent] || 'unknown';
+  const agent = SERVER_AGENT;
+  const model = CLI_MODEL || own(DEFAULT_MODELS, agent) || 'CLI default';
   console.log(`\n  clinky — http://localhost:${PORT}`);
   console.log(`  agent: ${agent}  model: ${model}`);
+  if (CLI_AGENT_UNKNOWN) {
+    console.log(`  ⚠ unknown --agent "${CLI_AGENT}" (valid: ${Object.keys(providers).join(', ')}) — using claude`);
+  }
+  const status = Object.entries(providers).map(([key, prov]) => {
+    const bin = backendBinary(prov);
+    return onPath(bin) ? `${key} ✓` : `${key} ✗ (${bin} not on PATH)`;
+  });
+  console.log(`  backends: ${status.join('  ')}`);
+  const defaultBin = backendBinary(providers[agent]);   // agent is a known key by construction
+  if (!onPath(defaultBin)) {
+    console.log(`  ⚠ default agent "${agent}" needs the ${defaultBin} CLI, which is not on PATH — requests to it will fail with a not-installed error until it is`);
+  }
   console.log(`  31 modes — see http://localhost:${PORT} for the full list\n`);
 });
