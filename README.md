@@ -8,7 +8,7 @@
 [![license](https://img.shields.io/npm/l/@ichbinsoftware/clinky.svg?style=flat-square)](https://github.com/ichbinsoftware/clinky/blob/main/LICENSE)
 [![node version](https://img.shields.io/node/v/@ichbinsoftware/clinky.svg?style=flat-square)](https://nodejs.org)
 
-A visual and sonic surface for AI thinking. Works with **claude**, **copilot**, and **codex**. The name: *cli + thinking = clinky*.
+A visual and sonic surface for AI thinking. Works with **claude**, **copilot**, **codex**, **antigravity**, **cursor**, and **qwen**. The name: *cli + thinking = clinky*.
 
 Not a chat interface. Not a document. A living map of how a thought unfolds — branches, choices, narrowings, dead ends, resolutions — rendered as something you'd want to look at and listen to.
 
@@ -52,7 +52,8 @@ clinky --verbose                     # log every node arrival to stderr
 
 `--model` applies only to the agent `--agent` selected. A request that names a
 different backend (`?agent=`) uses that backend's own default instead, so a
-model id is never handed to the CLI it doesn't belong to.
+model id is never handed to the CLI it doesn't belong to. An unknown `?agent=`
+value falls back to claude and drops any `?model=` that rode along with it.
 
 Recorded sessions are listed at `/api/sessions`. Replay any via `/api/replay/<id>` — append `?speed=` (default 4×, 0 = instant) to control playback rate.
 
@@ -76,7 +77,7 @@ CLI shows up before you send a request rather than as a spawn error mid-session.
 
 **copilot** is opt-in rather than the default for a reason: the CLI has removed flags without deprecation notice before, breaking adapters silently. If a copilot update breaks the integration, switch back to `--agent claude`. Effort `max` clamps to `xhigh`.
 
-**codex** requires the working directory to be inside a trusted git repo (`--skip-git-repo-check` is passed automatically). No effort knob — reasoning depth is set by the model variant.
+**codex** requires the working directory to be inside a trusted git repo (`--skip-git-repo-check` is passed automatically). Effort passes through as `model_reasoning_effort`; `max` clamps to `xhigh`.
 
 **claude** is the only backend with prompt-cache control, so the large system prompt stays cacheable across requests — noticeably faster on repeated runs.
 
@@ -109,7 +110,7 @@ Open **http://localhost:4243** in your browser (substitute your `--port` if you 
 5. Nodes stream to the browser via SSE
 6. Each mode renders the node as a visual element with a synthesized sound
 
-The Bash commands are never executed. The call is a delivery mechanism — the server parses JSON out of the command string and discards it. Bash is used because it's universal across all three backends and provides a real-time `tool_use` event the instant the model invokes it, before output is ready. The model is asked to batch 3–4 thoughts per call for speed.
+The Bash commands are never executed. The call is a delivery mechanism — the server parses JSON out of the command string and discards it. Bash is used because it's universal across all six backends and provides a real-time `tool_use` event the instant the model invokes it, before output is ready. The model is asked to batch 3–4 thoughts per call for speed.
 
 ### The thought node
 
@@ -269,25 +270,29 @@ server.js
   └─ GET /api/replay/<id>?speed=&mode=  → replay a recorded session
 
 agents/ (one file per backend)
-  ├─ shared.js     ← SYSTEM_PROMPT, extractAndEmitNodes, runWithProvider
-  ├─ claude.js     ← spawns claude --output-format stream-json
-  ├─ copilot.js    ← spawns copilot --output-format json
-  └─ codex.js      ← spawns codex exec --json
+  ├─ shared.js       ← SYSTEM_PROMPT, extractAndEmitNodes, runWithProvider
+  ├─ claude.js       ← spawns claude --output-format stream-json
+  ├─ copilot.js      ← spawns copilot --output-format json
+  ├─ codex.js        ← spawns codex exec --json
+  ├─ antigravity.js  ← spawns agy -p --output-format stream-json
+  ├─ cursor.js       ← spawns cursor-agent -p --output-format stream-json
+  └─ qwen.js         ← spawns qwen -p -o stream-json
 ```
 
 Every mode is a class extending `Mode` (`/public/mode.js`). The base class owns canvas setup, resize, chrome, SSE lifecycle, RAF loop. Each mode implements `draw()` and overrides hooks (`onNode`, `onClear`, `onDone`).
 
 ### Backend comparison
 
-| | claude | copilot | codex |
-|---|---|---|---|
-| Real-time hook | `tool_use` (Bash) | `tool.execution_start` (bash) | `item.started` (command_execution) |
-| Node source | command string | command string | stdout at `item.completed` |
-| Usage event | full token + cost | `premiumRequests` only | input/output/cache tokens |
-| Default model | claude-sonnet-4-6 | claude-sonnet-4.6 | gpt-5.4 |
-| Node timing | streaming | streaming | per-batch |
+| | claude | copilot | codex | antigravity | cursor | qwen |
+|---|---|---|---|---|---|---|
+| Real-time hook | `tool_use` (Bash) | `tool.execution_start` (bash) | `item.started` (command_execution) | `step_update` ACTIVE (run_command) | `tool_call` started (shell) | `tool_use` (run_shell_command) |
+| Node source | command string | command string | stdout at `item.completed` | tool output at DONE | command string (stdout fallback) | command string (stdout fallback) |
+| Usage event | full token + cost | `premiumRequests` only | input/output/cache tokens | input/output/thinking tokens | input/output/cache tokens | input/output/cache-read tokens |
+| Default model | claude-sonnet-5 | claude-sonnet-5 | gpt-5.6-sol | Gemini 3.1 Pro (High) | composer-2.5 | qwen3.8-flash |
+| Node timing | streaming | streaming | per-batch | per-batch | streaming | per-batch |
+| Effort flag | yes | yes (`max`→`xhigh`) | yes (`max`→`xhigh`) | no — in model name | no — in model id | no |
 
-Any model name passes through — no allowlist, new models work automatically. Effort: `low` | `medium` | `high` (default) | `xhigh` | `max`.
+Any model name passes through — no allowlist, new models work automatically. Effort: `low` | `medium` | `high` (default) | `xhigh` | `max`. Backends without an effort flag ignore the parameter, and session metadata records no effort for them rather than the default.
 
 ## No server dependencies
 
